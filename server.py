@@ -329,7 +329,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print(f"\n=======================================================")
-    print(f"🚀 JARVIS WEB DASHBOARD RUNNING AT: http://localhost:{args.port}")
+    print(f" JARVIS WEB DASHBOARD RUNNING AT: http://localhost:{args.port}")
     print(f"=======================================================\n")
 
     uvicorn.run("server:app", host=args.host, port=args.port, reload=False)

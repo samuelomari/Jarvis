@@ -173,7 +173,7 @@ function appendAssistantMessage(markdownText, toolCalls) {
   if (toolCalls && toolCalls.length > 0) {
     toolsHtml = toolCalls.map(tc => `
       <div class="tool-execution-card">
-        ⚡ <strong>Tool Execution:</strong> <code>${escapeHtml(tc.tool)}</code> (${escapeHtml(JSON.stringify(tc.args))})
+         <strong>Tool Execution:</strong> <code>${escapeHtml(tc.tool)}</code> (${escapeHtml(JSON.stringify(tc.args))})
       </div>
     `).join('');
   }
@@ -364,7 +364,7 @@ function renderEvents(events) {
     <div class="event-card-item ${escapeHtml(e.category || 'general')}">
       <div>
         <strong style="color:#fff; font-size:0.92rem;">${escapeHtml(e.title)}</strong>
-        <div class="item-meta">📅 ${escapeHtml(e.date)} at ${escapeHtml(e.time)} | [${escapeHtml(e.category)}]</div>
+        <div class="item-meta">Date: ${escapeHtml(e.date)} at ${escapeHtml(e.time)} | [${escapeHtml(e.category)}]</div>
         ${e.description ? `<p style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">${escapeHtml(e.description)}</p>` : ''}
       </div>
       <button class="btn-delete-item" onclick="deleteCalendarEvent('${e.id}')" title="Delete Event">
@@ -389,7 +389,7 @@ function renderReminders(reminders) {
           <strong style="color:#fff; font-size:0.92rem;">${escapeHtml(r.title)}</strong>
           <span class="status-badge ${escapeHtml(r.status)}">${escapeHtml(r.status)}</span>
         </div>
-        <div class="item-meta">⏰ Target: ${escapeHtml(r.remind_at)} ${r.note ? `| ${escapeHtml(r.note)}` : ''}</div>
+        <div class="item-meta">Time: Target: ${escapeHtml(r.remind_at)} ${r.note ? `| ${escapeHtml(r.note)}` : ''}</div>
       </div>
       <div style="display:flex; gap:6px;">
         ${r.status === 'pending' || r.status === 'triggered' ? `
@@ -607,7 +607,7 @@ async function loadTelemetry() {
       const toolsGrid = document.getElementById('tools-list-grid');
       toolsGrid.innerHTML = toolsData.tools.map(t => `
         <div class="tool-chip">
-          <strong>⚡ ${escapeHtml(t.name)}</strong>
+          <strong> ${escapeHtml(t.name)}</strong>
           <p>${escapeHtml(t.description)}</p>
         </div>
       `).join('');

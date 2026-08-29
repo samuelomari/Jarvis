@@ -23,7 +23,7 @@ def handle_shutdown(signum, frame):
 def run_daemon():
     """Main daemon loop checking reminders and system status."""
     print("=" * 60)
-    print("⚡ JARVIS ALWAYS-ON DAEMON STARTED")
+    print(" JARVIS ALWAYS-ON DAEMON STARTED")
     print(f"Monitoring active reminders and tasks...")
     print("Press Ctrl+C to terminate.")
     print("=" * 60)
@@ -36,7 +36,7 @@ def run_daemon():
             triggered = calendar_manager.check_pending_reminders()
             for r in triggered:
                 now_str = datetime.now().strftime("%H:%M:%S")
-                print(f"[{now_str}] 🔔 REMINDER TRIGGERED: {r.get('title')} (Note: {r.get('note', 'None')})")
+                print(f"[{now_str}] [ALERT] REMINDER TRIGGERED: {r.get('title')} (Note: {r.get('note', 'None')})")
 
             time.sleep(5)
         except Exception as exc:

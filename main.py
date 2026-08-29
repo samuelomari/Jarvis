@@ -37,7 +37,7 @@ def print_banner():
             f"[dim]Model: {MODEL} | Type [bold]/help[/bold] for commands[/dim]"
         )
         console.print(
-            Panel(banner_text, title="⚡ SYSTEM ONLINE", border_style="cyan")
+            Panel(banner_text, title=" SYSTEM ONLINE", border_style="cyan")
         )
     else:
         print("=" * 60)
@@ -121,7 +121,7 @@ def on_tool_executed(name: str, args: dict, result: dict):
     """Callback hook to print tool execution activity in the terminal."""
     args_summary = ", ".join(f"{k}={repr(v)[:40]}" for k, v in args.items())
     if HAS_RICH:
-        console.print(f"[tool]⚡ Tool Call:[/tool] [bold]{name}[/bold]({args_summary})")
+        console.print(f"[tool] Tool Call:[/tool] [bold]{name}[/bold]({args_summary})")
     else:
         print(f"-> Tool Call: {name}({args_summary})")
 
@@ -134,7 +134,7 @@ def main():
     while True:
         try:
             if HAS_RICH:
-                user_input = console.input("\n[user]You ❯ [/user]").strip()
+                user_input = console.input("\n[user]You > [/user]").strip()
             else:
                 user_input = input("\nYou: ").strip()
 
@@ -164,7 +164,7 @@ def main():
 
             if cmd == "/dashboard":
                 if HAS_RICH:
-                    console.print("[bold cyan]🚀 Jarvis Web Dashboard is available at:[/bold cyan] [underline]http://localhost:8000[/underline]")
+                    console.print("[bold cyan] Jarvis Web Dashboard is available at:[/bold cyan] [underline]http://localhost:8000[/underline]")
                     console.print("[dim]Run `python3 server.py` in a separate terminal to start the dashboard server.[/dim]")
                 else:
                     print("Jarvis Web Dashboard: http://localhost:8000 (Run `python3 server.py` to start)")
@@ -173,7 +173,7 @@ def main():
             if cmd == "/clear":
                 jarvis.clear_history()
                 if HAS_RICH:
-                    console.print("[green]✓ Conversation history cleared.[/green]")
+                    console.print("[green][OK] Conversation history cleared.[/green]")
                 else:
                     print("Conversation history cleared.")
                 continue
@@ -183,7 +183,7 @@ def main():
                 with console.status("[dim cyan]Jarvis is thinking...[/dim cyan]", spinner="dots"):
                     response = jarvis.chat(user_input, on_tool_call=on_tool_executed)
 
-                console.print("\n[jarvis]Jarvis ❯[/jarvis]")
+                console.print("\n[jarvis]Jarvis >[/jarvis]")
                 console.print(Markdown(response))
             else:
                 print("\nJarvis is thinking...")

@@ -113,13 +113,13 @@ You: exit
 
 This is the core **agent loop**:
 
-1. **User input** → Sent to Claude
-2. **Claude processes** → Reads `SYSTEM.md`, understands available tools
-3. **Claude decides** → "I need to use `get_current_time`"
-4. **Tool execution** → Python runs `get_current_time()`
-5. **Tool result** → Returned to Claude
-6. **Claude responds** → Generates final answer
-7. **Display response** → Shown to user
+1. **User input** -> Sent to Claude
+2. **Claude processes** -> Reads `SYSTEM.md`, understands available tools
+3. **Claude decides** -> "I need to use `get_current_time`"
+4. **Tool execution** -> Python runs `get_current_time()`
+5. **Tool result** -> Returned to Claude
+6. **Claude responds** -> Generates final answer
+7. **Display response** -> Shown to user
 
 ## Understanding the Code
 
@@ -221,6 +221,12 @@ Jarvis includes a modern Cybernetic Web Dashboard:
    ```
 2. **Access the Interface**:
    Open [http://localhost:8000](http://localhost:8000) in your browser.
+
+### Visual Previews
+
+![JARVIS Neural Terminal & Interactive AI Chat](docs/images/jarvis_chat_ui.jpg)
+
+![JARVIS Memory Matrix, Calendar Agenda & Codebase Telemetry Center](docs/images/jarvis_matrix_ui.jpg)
 
 ### Dashboard Features
 - **Neural Terminal**: Real-time conversation stream, prompt suggestions, live tool execution cards, and Markdown rendering.
