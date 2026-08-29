@@ -185,21 +185,49 @@ You are Jarvis, a personal AI assistant...
 
 Claude reads this every time you chat with Jarvis.
 
+## Capabilities & Tools (Stage 2)
+
+Jarvis v0.2 includes the following built-in tools:
+
+| Tool | Category | Description |
+|---|---|---|
+| `get_current_time` | Utility | Fetches the current local date and time. |
+| `remember` | Memory | Saves facts, preferences, goals, or notes to persistent JSON storage. |
+| `recall` | Memory | Searches and retrieves stored memories across categories. |
+| `forget` | Memory | Deletes specific memories by index or query match. |
+| `read_file` | Filesystem | Reads file contents or line slices within the project workspace. |
+| `write_file` | Filesystem | Creates or safely updates files in the project workspace. |
+| `list_directory` | Filesystem | Formats directory tree views with file sizes and depth controls. |
+| `search_files` | Filesystem | Searches for text snippets across project workspace files. |
+
+## CLI Commands
+
+Inside the Jarvis interactive terminal session:
+- `/help` — Display command cheat sheet
+- `/memory` — Inspect all long-term memories in structured tables
+- `/tools` — List registered tools and schemas
+- `/clear` — Clear current conversation message history
+- `/exit` — Shut down Jarvis
+
+## Running Tests
+
+Run the automated pytest test suite:
+
+```bash
+source venv/bin/activate
+pytest tests/ -v
+```
+
 ## Next Steps
 
-Once you're comfortable with this working, we'll build **Stage 2** which adds:
+We are ready for **Stage 3**:
 
-- [ ] Persistent memory system (`remember`, `recall`, `forget`)
-- [ ] File reading tools (`read_file`, `search_files`)
-- [ ] Project awareness
-
-Then **Stage 3**:
-
+- [x] Persistent memory system (`remember`, `recall`, `forget`)
+- [x] File operations (`read_file`, `write_file`, `list_directory`, `search_files`)
+- [x] Project awareness & dynamic context injection
 - [ ] Skills system
 - [ ] Web research
 - [ ] Calendar & reminders
-
-See the attached architecture guide for the full 9-phase plan.
 
 ## Troubleshooting
 
@@ -265,3 +293,4 @@ This separation means:
 ## License
 
 Personal project - feel free to modify and extend.
+# Jarvis
