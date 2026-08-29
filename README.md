@@ -185,49 +185,94 @@ You are Jarvis, a personal AI assistant...
 
 Claude reads this every time you chat with Jarvis.
 
-## Capabilities & Tools (Stage 2)
+## Capabilities & Tools (Stages 2 - 9)
 
-Jarvis v0.2 includes the following built-in tools:
+Jarvis v0.2 includes 17 registered built-in tools across all domains:
 
-| Tool | Category | Description |
+| Tool | Domain | Description |
 |---|---|---|
 | `get_current_time` | Utility | Fetches the current local date and time. |
 | `remember` | Memory | Saves facts, preferences, goals, or notes to persistent JSON storage. |
 | `recall` | Memory | Searches and retrieves stored memories across categories. |
 | `forget` | Memory | Deletes specific memories by index or query match. |
-| `read_file` | Filesystem | Reads file contents or line slices within the project workspace. |
-| `write_file` | Filesystem | Creates or safely updates files in the project workspace. |
-| `list_directory` | Filesystem | Formats directory tree views with file sizes and depth controls. |
-| `search_files` | Filesystem | Searches for text snippets across project workspace files. |
+| `read_file` | Filesystem | Reads file contents or line slices within the workspace. |
+| `write_file` | Filesystem | Creates or safely updates files with overwrite guards. |
+| `list_directory` | Filesystem | Formats workspace directory tree with file sizes. |
+| `search_files` | Filesystem | Searches for text patterns across workspace files. |
+| `analyze_codebase` | Analysis | Computes total LOC, language breakdown, and key project files. |
+| `inspect_symbols` | Analysis | Extracts classes, methods, functions, and imports from Python files using AST. |
+| `search_web` | Web Research | Performs live web searches via DuckDuckGo. |
+| `fetch_webpage` | Web Research | Downloads and strips clean text from any URL. |
+| `create_calendar_event` | Calendar | Schedules events and meetings with categories and times. |
+| `list_calendar_events` | Calendar | Queries scheduled agenda items with date filtering. |
+| `set_reminder` | Reminders | Sets timed reminders and alerts. |
+| `list_reminders` | Reminders | Queries pending, triggered, or dismissed reminders. |
+| `dismiss_reminder` | Reminders | Acknowledges active reminder alerts. |
 
-## CLI Commands
+---
 
-Inside the Jarvis interactive terminal session:
+## Web Dashboard UI (Stage 6 - 9)
+
+Jarvis includes a modern Cybernetic Web Dashboard:
+
+1. **Start the Web Server**:
+   ```bash
+   python3 server.py --port 8000
+   ```
+2. **Access the Interface**:
+   Open [http://localhost:8000](http://localhost:8000) in your browser.
+
+### Dashboard Features
+- **Neural Terminal**: Real-time conversation stream, prompt suggestions, live tool execution cards, and Markdown rendering.
+- **Memory Matrix**: Visual categorized explorer for preferences, projects, goals, and facts with search and live CRUD.
+- **Agenda & Reminders Hub**: Interactive scheduler and alert center with real-time status chips.
+- **Codebase Analyzer**: Interactive project metrics, workspace tree, and live source previewer.
+- **Web Research Hub**: Live DuckDuckGo search query panel and article extractor.
+- **System Telemetry**: Live CPU, RAM, disk gauges, server uptime, and active tool monitor.
+
+---
+
+## Always-On Background Daemon (Stage 9)
+
+Run the background daemon to continuously monitor reminders and system tasks:
+
+```bash
+python3 daemon.py
+```
+
+---
+
+## Interactive CLI Commands
+
+Inside the terminal CLI (`python3 main.py`):
 - `/help` — Display command cheat sheet
-- `/memory` — Inspect all long-term memories in structured tables
-- `/tools` — List registered tools and schemas
+- `/memory` — Inspect all long-term memories in formatted tables
+- `/tools` — List all registered tools and schemas
+- `/dashboard` — Display web dashboard URL
 - `/clear` — Clear current conversation message history
 - `/exit` — Shut down Jarvis
 
-## Running Tests
+---
 
-Run the automated pytest test suite:
+## Running Automated Tests
+
+Run the full pytest test suite (26 unit tests):
 
 ```bash
 source venv/bin/activate
 pytest tests/ -v
 ```
 
-## Next Steps
+---
 
-We are ready for **Stage 3**:
+## Roadmap Status
 
-- [x] Persistent memory system (`remember`, `recall`, `forget`)
-- [x] File operations (`read_file`, `write_file`, `list_directory`, `search_files`)
-- [x] Project awareness & dynamic context injection
-- [ ] Skills system
-- [ ] Web research
-- [ ] Calendar & reminders
+- [x] **Stage 1**: Core LLM Tool Agent Loop
+- [x] **Stage 2**: Persistent Long-Term Memory System
+- [x] **Stage 3**: File Reading & Codebase Static Analysis (AST parsing)
+- [x] **Stage 4**: Live Web Search & Webpage Extractor
+- [x] **Stage 5**: Calendar & Timed Reminders System
+- [x] **Stage 6-9**: Cybernetic Web Dashboard UI & Always-On Daemon
 
 ## Troubleshooting
 

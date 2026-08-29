@@ -55,6 +55,7 @@ def print_help():
         table.add_row("/help", "Show this help table")
         table.add_row("/memory", "Inspect all long-term memories")
         table.add_row("/tools", "List all registered tools and descriptions")
+        table.add_row("/dashboard", "Launch or display the Cyber Web Dashboard")
         table.add_row("/clear", "Reset conversation history")
         table.add_row("/exit, exit", "Exit the assistant session")
         console.print(table)
@@ -159,6 +160,14 @@ def main():
 
             if cmd == "/memory":
                 print_memory(jarvis)
+                continue
+
+            if cmd == "/dashboard":
+                if HAS_RICH:
+                    console.print("[bold cyan]🚀 Jarvis Web Dashboard is available at:[/bold cyan] [underline]http://localhost:8000[/underline]")
+                    console.print("[dim]Run `python3 server.py` in a separate terminal to start the dashboard server.[/dim]")
+                else:
+                    print("Jarvis Web Dashboard: http://localhost:8000 (Run `python3 server.py` to start)")
                 continue
 
             if cmd == "/clear":

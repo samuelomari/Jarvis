@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JARVIS // Cybernetic AI Operations Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Rajdhani:wght@500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="hud-background">
+    <div class="grid-overlay"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+  </div>
+
+  <div class="app-layout">
+    <!-- Top Header -->
+    <header class="hud-header">
+      <div class="logo-area">
+        <div class="reactor-core">
+          <div class="core-ring"></div>
+          <div class="core-center"></div>
+        </div>
+        <div class="logo-text">
+          <h1>JARVIS <span>v0.2.0</span></h1>
+          <p class="status-indicator"><span class="pulse-dot"></span> NEURAL INTERFACE ONLINE</p>
+        </div>
+      </div>
+
+      <div class="quick-telemetry">
+        <div class="telem-chip" id="chip-time">
+          <i data-lucide="clock"></i> <span id="header-clock">--:--:--</span>
+        </div>
+        <div class="telem-chip" id="chip-cpu">
+          <i data-lucide="cpu"></i> CPU: <span id="header-cpu">0%</span>
+        </div>
+        <div class="telem-chip" id="chip-mem">
+          <i data-lucide="activity"></i> RAM: <span id="header-mem">0%</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="hud-nav">
+      <button class="nav-tab active" data-tab="chat-view">
+        <i data-lucide="bot"></i> <span>Terminal Chat</span>
+      </button>
+      <button class="nav-tab" data-tab="memory-view">
+        <i data-lucide="brain"></i> <span>Memory Matrix</span>
+      </button>
+      <button class="nav-tab" data-tab="calendar-view">
+        <i data-lucide="calendar"></i> <span>Agenda & Reminders</span>
+      </button>
+      <button class="nav-tab" data-tab="code-view">
+        <i data-lucide="code-2"></i> <span>Codebase Analyzer</span>
+      </button>
+      <button class="nav-tab" data-tab="search-view">
+        <i data-lucide="globe"></i> <span>Web Research</span>
+      </button>
+      <button class="nav-tab" data-tab="system-view">
+        <i data-lucide="shield-check"></i> <span>System Telemetry</span>
+      </button>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="hud-content">
+      
+      <!-- TAB 1: CHAT & TERMINAL -->
+      <section id="chat-view" class="tab-pane active">
+        <div class="chat-container">
+          <div class="chat-header-bar">
+            <div class="chat-title">
+              <i data-lucide="terminal"></i> Interactive Assistant Console
+            </div>
+            <div class="chat-actions">
+              <button id="btn-quick-time" class="btn-pill" title="Check Time"><i data-lucide="clock"></i> Time</button>
+              <button id="btn-quick-stats" class="btn-pill" title="Inspect Code"><i data-lucide="file-code"></i> Analyze Code</button>
+              <button id="btn-quick-memory" class="btn-pill" title="Recall Info"><i data-lucide="brain"></i> Memories</button>
+              <button id="btn-clear-chat" class="btn-secondary"><i data-lucide="trash-2"></i> Clear</button>
+            </div>
+          </div>
+
+          <div class="chat-stream" id="chat-stream">
+            <div class="message-bubble system-welcome">
+              <div class="bubble-avatar"><i data-lucide="shield-alert"></i></div>
+              <div class="bubble-content">
+                <h3>Welcome back, Samuel.</h3>
+                <p>Jarvis is fully operational. All subsystems (Persistent Memory, Filesystem IO, Codebase Analysis, Live Web Search, and Agenda Management) are loaded.</p>
+                <div class="prompt-suggestions">
+                  <button class="suggestion-chip" onclick="sendSuggested('Analyze the codebase and show me the project structure.')">Analyze Codebase</button>
+                  <button class="suggestion-chip" onclick="sendSuggested('Remember that I am building DevOS and my main language is Python.')">Save Memory</button>
+                  <button class="suggestion-chip" onclick="sendSuggested('Set a reminder to review project tests at 18:00 today.')">Set Reminder</button>
+                  <button class="suggestion-chip" onclick="sendSuggested('Search the web for the latest Python 3.14 features.')">Web Search</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-input-wrapper">
+            <form id="chat-form" class="chat-form">
+              <textarea id="chat-input" placeholder="Type a message or instruction for Jarvis..." rows="1"></textarea>
+              <button type="submit" id="btn-send" class="btn-primary">
+                <i data-lucide="send"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: MEMORY MATRIX -->
+      <section id="memory-view" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2><i data-lucide="brain"></i> Long-Term Memory Matrix</h2>
+            <p class="subtitle">Persistent storage across sessions in <code>memory/memory.json</code></p>
+          </div>
+          <button id="btn-add-memory-modal" class="btn-primary"><i data-lucide="plus-circle"></i> Add Memory</button>
+        </div>
+
+        <div class="memory-search-bar">
+          <i data-lucide="search"></i>
+          <input type="text" id="memory-filter" placeholder="Filter memories by keyword or category..." />
+        </div>
+
+        <div class="memory-grid" id="memory-grid">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- TAB 3: CALENDAR & REMINDERS -->
+      <section id="calendar-view" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2><i data-lucide="calendar"></i> Agenda & Timed Reminders</h2>
+            <p class="subtitle">Scheduled events and active background alerts</p>
+          </div>
+          <div class="header-buttons">
+            <button id="btn-add-event-modal" class="btn-primary"><i data-lucide="calendar-plus"></i> New Event</button>
+            <button id="btn-add-reminder-modal" class="btn-secondary"><i data-lucide="bell-plus"></i> New Reminder</button>
+          </div>
+        </div>
+
+        <div class="calendar-layout">
+          <div class="agenda-card">
+            <h3><i data-lucide="list"></i> Scheduled Events</h3>
+            <div id="events-list" class="items-list">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+          <div class="reminders-card">
+            <h3><i data-lucide="bell"></i> Active Reminders</h3>
+            <div id="reminders-list" class="items-list">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: CODEBASE ANALYZER -->
+      <section id="code-view" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2><i data-lucide="code-2"></i> Codebase Architecture & Files</h2>
+            <p class="subtitle">Static analysis, AST parsing, and live workspace explorer</p>
+          </div>
+          <button id="btn-refresh-code" class="btn-secondary"><i data-lucide="rotate-cw"></i> Refresh</button>
+        </div>
+
+        <div class="code-stats-grid" id="code-stats-cards">
+          <!-- Populated by JS -->
+        </div>
+
+        <div class="code-explorer-layout">
+          <div class="tree-panel">
+            <h3><i data-lucide="folder-tree"></i> Workspace Tree</h3>
+            <pre id="code-tree" class="tree-pre">Loading...</pre>
+          </div>
+          <div class="file-preview-panel">
+            <div class="file-preview-header">
+              <span id="preview-filename"><i data-lucide="file-text"></i> Select a file or top file</span>
+            </div>
+            <pre id="code-preview" class="file-preview-pre">Click any top file above to inspect content.</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: WEB RESEARCH -->
+      <section id="search-view" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2><i data-lucide="globe"></i> Web Research Hub</h2>
+            <p class="subtitle">Live search and content reader powered by DuckDuckGo</p>
+          </div>
+        </div>
+
+        <div class="search-box-wrapper">
+          <form id="web-search-form" class="search-form">
+            <i data-lucide="search"></i>
+            <input type="text" id="web-search-input" placeholder="Search the web for documentation, articles, news..." required />
+            <button type="submit" class="btn-primary">Search</button>
+          </form>
+        </div>
+
+        <div id="search-results" class="search-results-list">
+          <div class="empty-state">
+            <i data-lucide="globe-2"></i>
+            <p>Enter a query above to fetch live web search results.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 6: SYSTEM TELEMETRY -->
+      <section id="system-view" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2><i data-lucide="shield-check"></i> System Health & Tool Registry</h2>
+            <p class="subtitle">Machine vitals, active background processes, and registered tools</p>
+          </div>
+        </div>
+
+        <div class="telemetry-grid">
+          <div class="telem-card">
+            <h3>CPU Load</h3>
+            <div class="metric-val" id="telem-cpu-val">--%</div>
+            <div class="metric-bar"><div id="telem-cpu-bar" class="bar-fill"></div></div>
+          </div>
+          <div class="telem-card">
+            <h3>Memory Usage</h3>
+            <div class="metric-val" id="telem-mem-val">--%</div>
+            <div class="metric-sub" id="telem-mem-sub">-- / -- MB</div>
+            <div class="metric-bar"><div id="telem-mem-bar" class="bar-fill"></div></div>
+          </div>
+          <div class="telem-card">
+            <h3>Disk Capacity</h3>
+            <div class="metric-val" id="telem-disk-val">--%</div>
+            <div class="metric-bar"><div id="telem-disk-bar" class="bar-fill"></div></div>
+          </div>
+          <div class="telem-card">
+            <h3>Server Uptime</h3>
+            <div class="metric-val" id="telem-uptime-val">0s</div>
+            <div class="metric-sub">Model: claude-3-5-sonnet</div>
+          </div>
+        </div>
+
+        <div class="tools-directory-card">
+          <h3><i data-lucide="wrench"></i> Registered Agent Tools (<span id="tools-count">0</span>)</h3>
+          <div id="tools-list-grid" class="tools-grid">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: ADD MEMORY -->
+  <div id="modal-memory" class="hud-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i data-lucide="brain"></i> Store New Memory</h3>
+        <button class="btn-close-modal">&times;</button>
+      </div>
+      <form id="form-add-memory">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="mem-input-category" required>
+            <option value="user_preferences">User Preferences</option>
+            <option value="projects">Projects</option>
+            <option value="goals">Goals</option>
+            <option value="important_facts">Important Facts</option>
+            <option value="custom">Custom Tag</option>
+          </select>
+        </div>
+        <div class="form-group" id="custom-cat-group" style="display: none;">
+          <label>Custom Category Name</label>
+          <input type="text" id="mem-input-custom-cat" placeholder="e.g. books, ideas, notes" />
+        </div>
+        <div class="form-group">
+          <label>Memory Content</label>
+          <textarea id="mem-input-content" rows="3" placeholder="Enter information to store..." required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary btn-close-modal">Cancel</button>
+          <button type="submit" class="btn-primary">Save Memory</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD EVENT -->
+  <div id="modal-event" class="hud-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i data-lucide="calendar-plus"></i> Schedule Calendar Event</h3>
+        <button class="btn-close-modal">&times;</button>
+      </div>
+      <form id="form-add-event">
+        <div class="form-group">
+          <label>Event Title</label>
+          <input type="text" id="event-input-title" placeholder="e.g. Project Review Meeting" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date (YYYY-MM-DD)</label>
+            <input type="date" id="event-input-date" required />
+          </div>
+          <div class="form-group">
+            <label>Time (HH:MM)</label>
+            <input type="time" id="event-input-time" value="09:00" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="event-input-category">
+            <option value="work">Work</option>
+            <option value="personal">Personal</option>
+            <option value="meeting">Meeting</option>
+            <option value="learning">Learning</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Description (Optional)</label>
+          <input type="text" id="event-input-desc" placeholder="Details or link" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary btn-close-modal">Cancel</button>
+          <button type="submit" class="btn-primary">Add Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD REMINDER -->
+  <div id="modal-reminder" class="hud-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i data-lucide="bell-plus"></i> Set Timed Reminder</h3>
+        <button class="btn-close-modal">&times;</button>
+      </div>
+      <form id="form-add-reminder">
+        <div class="form-group">
+          <label>Reminder Summary</label>
+          <input type="text" id="rem-input-title" placeholder="e.g. Submit project status report" required />
+        </div>
+        <div class="form-group">
+          <label>Remind At Date & Time</label>
+          <input type="datetime-local" id="rem-input-datetime" required />
+        </div>
+        <div class="form-group">
+          <label>Notes / Context (Optional)</label>
+          <input type="text" id="rem-input-note" placeholder="Additional details" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary btn-close-modal">Cancel</button>
+          <button type="submit" class="btn-primary">Set Reminder</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
+

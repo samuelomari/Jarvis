@@ -1,4 +1,4 @@
-"""Jarvis tools package."""
+"""Jarvis tools package with auto-registration of all tool modules."""
 
 from tools.registry import (
     register_tool,
@@ -7,10 +7,13 @@ from tools.registry import (
     get_registered_tools,
 )
 
-# Import tool modules to ensure all tools are registered
+# Import all tool modules to register their tools
 from tools import basic
 from tools import memory_tools
 from tools import filesystem
+from tools import analysis
+from tools import web_search
+from tools import calendar_tools
 
 __all__ = [
     "register_tool",
@@ -20,5 +23,7 @@ __all__ = [
     "basic",
     "memory_tools",
     "filesystem",
+    "analysis",
+    "web_search",
+    "calendar_tools",
 ]
-
