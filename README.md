@@ -230,11 +230,14 @@ Jarvis includes a modern Cybernetic Web Dashboard:
 
 ### Dashboard Features
 - **Neural Terminal**: Real-time conversation stream, prompt suggestions, live tool execution cards, and Markdown rendering.
+- **Voice Input**: Use the microphone control to dictate an editable message before sending it to Jarvis.
 - **Memory Matrix**: Visual categorized explorer for preferences, projects, goals, and facts with search and live CRUD.
 - **Agenda & Reminders Hub**: Interactive scheduler and alert center with real-time status chips.
 - **Codebase Analyzer**: Interactive project metrics, workspace tree, and live source previewer.
 - **Web Research Hub**: Live DuckDuckGo search query panel and article extractor.
 - **System Telemetry**: Live CPU, RAM, disk gauges, server uptime, and active tool monitor.
+
+Voice input requires a browser with `SpeechRecognition` support and microphone permission. Use `localhost` or HTTPS where required by the browser. Speech recognition may send audio to a browser or browser-provider service; no audio is uploaded by Jarvis itself.
 
 ---
 

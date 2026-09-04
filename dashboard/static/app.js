@@ -58,6 +58,10 @@ function initChat() {
   const btnQuickTime = document.getElementById('btn-quick-time');
   const btnQuickStats = document.getElementById('btn-quick-stats');
   const btnQuickMemory = document.getElementById('btn-quick-memory');
+  const btnVoice = document.getElementById('btn-voice');
+  const voiceStatus = document.getElementById('voice-status');
+
+  initVoiceInput(chatInput, btnVoice, voiceStatus);
 
   // Auto-grow textarea
   chatInput.addEventListener('input', () => {
@@ -105,6 +109,89 @@ function initChat() {
   btnQuickTime.addEventListener('click', () => sendSuggested("What is the current time?"));
   btnQuickStats.addEventListener('click', () => sendSuggested("Analyze the project codebase and summarize key files."));
   btnQuickMemory.addEventListener('click', () => sendSuggested("Recall everything stored in long-term memory."));
+}
+
+function initVoiceInput(chatInput, button, status) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    button.disabled = true;
+    button.title = 'Voice input is not supported in this browser';
+    button.setAttribute('aria-label', 'Voice input is not supported in this browser');
+    status.textContent = 'Voice input is not supported in this browser.';
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  let isRecording = false;
+  let baseText = '';
+  let finalTranscript = '';
+  let lastError = '';
+
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = document.documentElement.lang || 'en-US';
+
+  const setRecordingState = (recording) => {
+    isRecording = recording;
+    button.classList.toggle('is-recording', recording);
+    button.setAttribute('aria-pressed', String(recording));
+    button.title = recording ? 'Stop voice input' : 'Start voice input';
+    button.setAttribute('aria-label', recording ? 'Stop voice input' : 'Start voice input');
+    status.textContent = recording ? 'Listening...' : '';
+    button.querySelector('i')?.setAttribute('data-lucide', recording ? 'square' : 'mic');
+    initLucide();
+  };
+
+  button.addEventListener('click', () => {
+    if (isRecording) {
+      recognition.stop();
+      return;
+    }
+
+    baseText = chatInput.value.trim();
+    finalTranscript = '';
+    lastError = '';
+    status.textContent = 'Starting microphone...';
+    try {
+      recognition.start();
+    } catch (error) {
+      status.textContent = 'Unable to start voice input.';
+      console.error(error);
+    }
+  });
+
+  recognition.onstart = () => setRecordingState(true);
+
+  recognition.onresult = (event) => {
+    let interimTranscript = '';
+
+    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      const transcript = event.results[index][0].transcript;
+      if (event.results[index].isFinal) {
+        finalTranscript += transcript;
+      } else {
+        interimTranscript += transcript;
+      }
+    }
+
+    const transcript = `${finalTranscript} ${interimTranscript}`.trim();
+    chatInput.value = [baseText, transcript].filter(Boolean).join(' ');
+    chatInput.dispatchEvent(new Event('input'));
+  };
+
+  recognition.onerror = (event) => {
+    lastError = event.error === 'not-allowed'
+      ? 'Microphone permission was denied.'
+      : 'Voice input encountered an error.';
+    setRecordingState(false);
+    status.textContent = lastError;
+  };
+
+  recognition.onend = () => {
+    setRecordingState(false);
+    status.textContent = lastError;
+  };
 }
 
 window.sendSuggested = function(promptText) {

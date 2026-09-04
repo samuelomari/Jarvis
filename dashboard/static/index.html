@@ -104,10 +104,14 @@
           <div class="chat-input-wrapper">
             <form id="chat-form" class="chat-form">
               <textarea id="chat-input" placeholder="Type a message or instruction for Jarvis..." rows="1"></textarea>
+              <button type="button" id="btn-voice" class="btn-secondary voice-button" title="Start voice input" aria-label="Start voice input" aria-pressed="false">
+                <i data-lucide="mic"></i>
+              </button>
               <button type="submit" id="btn-send" class="btn-primary">
                 <i data-lucide="send"></i>
               </button>
             </form>
+            <span id="voice-status" class="voice-status" role="status" aria-live="polite"></span>
           </div>
         </div>
       </section>

@@ -518,6 +518,35 @@ body {
   box-shadow: 0 0 8px var(--cyan-glow);
 }
 
+.voice-button {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.voice-button.is-recording {
+  border-color: var(--accent-yellow);
+  color: var(--accent-yellow);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.35);
+}
+
+.voice-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.voice-status {
+  display: block;
+  min-height: 1.1rem;
+  margin: 6px 52px 0 2px;
+  color: var(--accent-yellow);
+  font-size: 0.75rem;
+}
+
 /* Memory Matrix */
 .memory-search-bar {
   display: flex;
