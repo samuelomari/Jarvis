@@ -925,3 +925,141 @@ body {
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 
+/* Notification and Agent Additions */
+.notification-chip {
+  position: relative;
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+  color: var(--accent-yellow) !important;
+}
+.notification-chip:hover {
+  background: rgba(245, 158, 11, 0.3) !important;
+}
+
+.agents-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.agent-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-cyan);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.agent-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 15px var(--cyan-glow);
+}
+.agent-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.agent-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(0, 242, 254, 0.15);
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.agent-card h4 {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: #fff;
+}
+.agent-card .agent-role {
+  font-size: 0.75rem;
+  color: var(--accent-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.agent-card p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.workflow-runner-card, .missions-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 20px;
+}
+.workflow-form {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.workflow-form input {
+  flex: 1;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-cyan);
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: #fff;
+  outline: none;
+}
+.workflow-output {
+  margin-top: 14px;
+  padding: 12px;
+  background: rgba(6, 12, 22, 0.9);
+  border: 1px solid var(--border-cyan);
+  border-radius: 6px;
+}
+.report-content {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  white-space: pre-wrap;
+}
+
+.notif-item {
+  background: rgba(15, 23, 42, 0.7);
+  border-left: 3px solid var(--accent-cyan);
+  padding: 10px 14px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.notif-item.unread {
+  background: rgba(0, 242, 254, 0.08);
+  border-left-color: var(--accent-yellow);
+}
+.notif-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+.notif-title { font-weight: 600; color: #fff; }
+.notif-time { color: var(--text-muted); font-size: 0.75rem; }
+.notif-msg { font-size: 0.85rem; color: var(--text-muted); }
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  background: rgba(0, 242, 254, 0.15);
+  color: var(--accent-cyan);
+}
+.btn-sm {
+  padding: 5px 10px !important;
+  font-size: 0.8rem !important;
+}
+
+

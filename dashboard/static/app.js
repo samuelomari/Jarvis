@@ -4,18 +4,22 @@ document.addEventListener('DOMContentLoaded', () => {
   initLucide();
   initTabs();
   initChat();
+  initAgentsAndMissions();
   initMemory();
   initCalendar();
   initCodebase();
   initWebSearch();
   initTelemetry();
+  initNotifications();
   initModals();
 
   // Initial loads
+  loadAgentsAndMissions();
   loadMemory();
   loadCalendar();
   loadCodebase();
   loadTelemetry();
+  loadNotifications();
 });
 
 function initLucide() {
@@ -42,6 +46,7 @@ function initTabs() {
       }
 
       // Trigger refreshes for active tab
+      if (targetId === 'agents-view') loadAgentsAndMissions();
       if (targetId === 'memory-view') loadMemory();
       if (targetId === 'calendar-view') loadCalendar();
       if (targetId === 'code-view') loadCodebase();

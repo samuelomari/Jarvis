@@ -47,19 +47,23 @@ jarvis/
 
 ## Setup
 
-### 1. Get your API key
+### 1. Run without a paid API key (recommended)
 
-1. Go to [console.anthropic.com](https://console.anthropic.com/)
-2. Create an account or log in
-3. Navigate to the API Keys section
-4. Create a new API key
+Jarvis now supports a built-in local fallback mode. If you do not want to pay for Anthropic, simply leave `ANTHROPIC_API_KEY` unset and start the app. It automatically switches to the offline mock client.
 
-### 2. Configure environment
+You can also force it explicitly:
 
-Edit `.env`:
-
+```bash
+JARVIS_DEV_MODE=true
 ```
+
+### 2. Optional: use the real Anthropic API
+
+If you want the cloud model instead, create an account at [console.anthropic.com](https://console.anthropic.com/), generate an API key, and add it in `.env`:
+
+```bash
 ANTHROPIC_API_KEY=your_api_key_here
+JARVIS_DEV_MODE=false
 ```
 
 **Never commit `.env` to git** (it's in `.gitignore`)

@@ -8,6 +8,12 @@ from tools.filesystem import (
     write_file,
     list_directory,
     search_files,
+    edit_file,
+    append_file,
+    delete_file,
+    copy_file,
+    move_file,
+    create_directory,
     PROJECT_ROOT,
 )
 
@@ -77,4 +83,71 @@ def test_search_files():
     assert res["success"] is True
     assert res["match_count"] > 0
     assert any("README.md" in m["file"] or "SYSTEM.md" in m["file"] for m in res["matches"])
+
+
+def test_edit_file_and_append(tmp_path):
+    """Test surgical edit and append capabilities."""
+    test_rel = "data/test_edit_sample.txt"
+    write_file(test_rel, "Line 1: Alpha\nLine 2: Beta\nLine 3: Gamma\n", overwrite=True)
+
+    # Append
+    app_res = append_file(test_rel, "Line 4: Delta\n")
+    assert app_res["success"] is True
+
+    # Surgical edit without line range
+    edit_res = edit_file(test_rel, "Beta", "Beta_Updated")
+    assert edit_res["success"] is True
+
+    read_res = read_file(test_rel)
+    assert "Beta_Updated" in read_res["content"]
+    assert "Delta" in read_res["content"]
+
+    # Scoped line range edit
+    edit_range = edit_file(test_rel, "Gamma", "Gamma_Special", start_line=2, end_line=4)
+    assert edit_range["success"] is True
+
+    # Not found
+    edit_missing = edit_file(test_rel, "NonExistentWord", "Replacement")
+    assert edit_missing["success"] is False
+    assert "not found" in edit_missing["error"].lower()
+
+    # Clean up
+    delete_res = delete_file(test_rel)
+    assert delete_res["success"] is True
+    assert not (PROJECT_ROOT / test_rel).exists()
+
+
+def test_file_copy_move_and_mkdir():
+    """Test directory creation, copy, and move tools."""
+    dir_rel = "data/test_temp_dir"
+    mkdir_res = create_directory(dir_rel)
+    assert mkdir_res["success"] is True
+
+    src_file = f"{dir_rel}/original.txt"
+    copied_file = f"{dir_rel}/copied.txt"
+    moved_file = f"{dir_rel}/moved.txt"
+
+    write_file(src_file, "Original content", overwrite=True)
+
+    # Copy
+    copy_res = copy_file(src_file, copied_file)
+    assert copy_res["success"] is True
+    assert (PROJECT_ROOT / copied_file).exists()
+
+    # Move
+    move_res = move_file(copied_file, moved_file)
+    assert move_res["success"] is True
+    assert (PROJECT_ROOT / moved_file).exists()
+    assert not (PROJECT_ROOT / copied_file).exists()
+
+    # Delete protected file guard
+    del_protected = delete_file("SYSTEM.md")
+    assert del_protected["success"] is False
+    assert "protected" in del_protected["error"].lower()
+
+    # Clean up
+    delete_file(src_file)
+    delete_file(moved_file)
+    import shutil
+    shutil.rmtree(PROJECT_ROOT / dir_rel, ignore_errors=True)
 

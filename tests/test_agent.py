@@ -1,21 +1,16 @@
 """Unit tests for Jarvis Agent, Tool Registry, and Execution Loop."""
 
 from unittest.mock import MagicMock, patch
-import pytest
 
 from agent.core import Jarvis
 from agent.context import build_system_prompt
-from tools.registry import (
-    register_tool,
-    execute_tool,
-    get_all_tool_schemas,
-    get_registered_tools,
-)
 from memory.manager import MemoryManager
+from tools.registry import execute_tool, get_all_tool_schemas, register_tool
 
 
 def test_tool_registry_registration_and_execution():
     """Test registering and executing custom tool."""
+
     @register_tool({
         "name": "mock_calculator",
         "description": "Adds two numbers.",
@@ -31,16 +26,13 @@ def test_tool_registry_registration_and_execution():
     def mock_calc(a: int, b: int):
         return a + b
 
-    # Check schema
     tools = get_all_tool_schemas()
     names = [t["name"] for t in tools]
     assert "mock_calculator" in names
 
-    # Execute
     res = execute_tool("mock_calculator", {"a": 10, "b": 25})
     assert res == 35
 
-    # Unknown tool
     unknown_res = execute_tool("non_existent_tool_xyz", {})
     assert unknown_res["success"] is False
     assert "not recognized" in unknown_res["error"]
@@ -62,6 +54,36 @@ def test_system_prompt_builder(tmp_path):
     assert "DevOS Project" in prompt
 
 
+def test_jarvis_mock_fallback_without_api_key(monkeypatch, tmp_path):
+    """Test that Jarvis works without a paid API key by using the local/offline option."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("JARVIS_DEV_MODE", "true")
+
+    with patch("agent.core.anthropic", None):
+        jarvis = Jarvis(
+            memory_manager=MemoryManager(tmp_path / "mem.json"),
+            system_file=tmp_path / "SYS.md",
+            workspace_root=tmp_path,
+        )
+        assert jarvis.client.__class__.__name__ in {"MockClient", "OllamaClient"}
+        reply = jarvis.chat("What time is it?")
+        assert isinstance(reply, str)
+        assert len(reply) > 0
+
+
+def test_required_integration_tools_are_registered():
+    """Ensure Jarvis exposes the speech and external-service access tools required for real usage."""
+    tool_names = {tool["name"] for tool in get_all_tool_schemas()}
+    for name in [
+        "speak_text",
+        "gmail_search_messages",
+        "calendar_list_events",
+        "github_list_repos",
+        "open_browser_url",
+    ]:
+        assert name in tool_names
+
+
 def test_jarvis_history_trimming(tmp_path):
     """Test message history trimming logic."""
     with patch("anthropic.Anthropic"):
@@ -71,7 +93,6 @@ def test_jarvis_history_trimming(tmp_path):
             workspace_root=tmp_path,
         )
 
-        # Add mock messages
         for i in range(60):
             jarvis.messages.append({
                 "role": "user" if i % 2 == 0 else "assistant",
@@ -80,7 +101,6 @@ def test_jarvis_history_trimming(tmp_path):
 
         assert jarvis.get_history_count() == 60
         jarvis._trim_history()
-        # Max history should keep it bounded and starting with a user message
         assert jarvis.get_history_count() <= 40
         assert jarvis.messages[0]["role"] == "user"
 
@@ -94,7 +114,6 @@ def test_jarvis_chat_tool_execution(tmp_path):
         mock_client = MagicMock()
         mock_anthropic.return_value = mock_client
 
-        # Mock tool use response followed by final text response
         tool_block = MagicMock()
         tool_block.type = "tool_use"
         tool_block.id = "call_abc123"
@@ -122,6 +141,7 @@ def test_jarvis_chat_tool_execution(tmp_path):
         )
 
         tool_calls = []
+
         def on_tool(name, args, result):
             tool_calls.append((name, args, result))
 

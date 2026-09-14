@@ -123,3 +123,124 @@ def test_system_stats_and_tools_endpoints(client):
     assert tools_resp.status_code == 200
     assert tools_resp.json()["count"] >= 10
 
+
+def test_file_operations_endpoints(client):
+    """Test REST endpoints for writing, editing, and deleting files."""
+    test_path = "data/test_server_file.txt"
+
+    # Write file
+    w_resp = client.post(
+        "/api/project/write",
+        json={"path": test_path, "content": "Initial Line\nSecond Line\n", "overwrite": True},
+    )
+    assert w_resp.status_code == 200
+    assert w_resp.json()["success"] is True
+
+    # Read file
+    r_resp = client.post("/api/project/read", json={"path": test_path})
+    assert r_resp.status_code == 200
+    assert "Initial Line" in r_resp.json()["content"]
+
+    # Edit file
+    e_resp = client.post(
+        "/api/project/edit",
+        json={
+            "path": test_path,
+            "target_content": "Second Line",
+            "replacement_content": "Modified Second Line",
+        },
+    )
+    assert e_resp.status_code == 200
+    assert e_resp.json()["success"] is True
+
+    # Delete file
+    d_resp = client.request("DELETE", "/api/project/delete", json={"path": test_path})
+    assert d_resp.status_code == 200
+    assert d_resp.json()["success"] is True
+
+
+def test_agents_endpoints(client):
+    """Test AI Subagents REST endpoints."""
+    # List agents
+    list_resp = client.get("/api/agents")
+    assert list_resp.status_code == 200
+    data = list_resp.json()
+    assert data["success"] is True
+    assert len(data["agents"]) >= 4
+
+    # Delegate task
+    del_resp = client.post(
+        "/api/agents/delegate",
+        json={"agent_name": "coder", "task": "Review API endpoints"},
+    )
+    assert del_resp.status_code == 200
+    assert del_resp.json()["success"] is True
+
+    # Multi-agent workflow
+    flow_resp = client.post(
+        "/api/agents/workflow",
+        json={"goal": "Verify database schema migration"},
+    )
+    assert flow_resp.status_code == 200
+    assert flow_resp.json()["success"] is True
+
+
+def test_autonomous_and_notifications_endpoints(client):
+    """Test autonomous tasks and notifications REST endpoints."""
+    # Create notification
+    n_resp = client.post(
+        "/api/notifications",
+        json={
+            "title": "Server Test Notification",
+            "message": "Testing notification endpoint",
+            "level": "info",
+            "desktop_alert": False,
+        },
+    )
+    assert n_resp.status_code == 200
+    assert n_resp.json()["success"] is True
+
+    # Get notifications
+    get_n = client.get("/api/notifications")
+    assert get_n.status_code == 200
+    assert get_n.json()["success"] is True
+    assert len(get_n.json()["notifications"]) > 0
+
+    # Mark all read
+    read_all = client.post("/api/notifications/read-all")
+    assert read_all.status_code == 200
+    assert read_all.json()["success"] is True
+
+    # Create autonomous task
+    task_resp = client.post(
+        "/api/autonomous/tasks",
+        json={
+            "name": "API Scheduled Mission",
+            "goal": "Check system metrics every hour",
+            "schedule_type": "interval",
+            "interval_minutes": 60,
+        },
+    )
+    assert task_resp.status_code == 200
+    assert task_resp.json()["success"] is True
+    task_id = task_resp.json()["task"]["id"]
+
+    # List tasks
+    list_tasks = client.get("/api/autonomous/tasks")
+    assert list_tasks.status_code == 200
+    assert any(t["id"] == task_id for t in list_tasks.json()["tasks"])
+
+    # Run autonomous now
+    run_now = client.post(
+        "/api/autonomous/run",
+        json={"goal": "Run brief diagnostic check", "max_steps": 2},
+    )
+    assert run_now.status_code == 200
+    assert run_now.json()["success"] is True
+
+    # Cancel task
+    del_task = client.delete(f"/api/autonomous/tasks/{task_id}")
+    assert del_task.status_code == 200
+    assert del_task.json()["success"] is True
+
+

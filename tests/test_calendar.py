@@ -86,13 +86,21 @@ def test_calendar_tools_execution():
     """Test tool wrapper functions."""
     e_res = create_calendar_event("Sprint Planning", "2026-09-01", "14:00", category="work")
     assert e_res["success"] is True
+    event_id = e_res["event"]["id"]
 
     l_res = list_calendar_events()
     assert l_res["success"] is True
 
     r_res = set_reminder("Weekly Review", "2026-09-01 17:00")
     assert r_res["success"] is True
+    reminder_id = r_res["reminder"]["id"]
 
     lr_res = list_reminders()
     assert lr_res["success"] is True
+
+    # Clean up test entries so live calendar is preserved
+    from tools.calendar_tools import get_calendar_manager
+    mgr = get_calendar_manager()
+    mgr.delete_event(event_id)
+    mgr.delete_reminder(reminder_id)
 

@@ -4,17 +4,26 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-import anthropic
+try:
+    import anthropic
+except ImportError:  # pragma: no cover - fallback path.
+    anthropic = None
 
 from agent.context import build_system_prompt
+from agent.local_model import OllamaClient
+from agent.mock import MockClient
 from config import (
     ANTHROPIC_API_KEY,
     ANTHROPIC_WORKSPACE_ID,
+    JARVIS_DEV_MODE,
     MAX_HISTORY_MESSAGES,
     MAX_TOKENS,
     MODEL,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
     PROJECT_ROOT,
     TOOLS,
+    USE_LOCAL_MODEL,
 )
 from memory.manager import MemoryManager
 from tools.registry import execute_tool, get_all_tool_schemas
@@ -35,13 +44,22 @@ class Jarvis:
             self.workspace_root / "memory" / "memory.json"
         )
 
-        client_kwargs = {"api_key": ANTHROPIC_API_KEY}
-        if ANTHROPIC_WORKSPACE_ID and ANTHROPIC_WORKSPACE_ID.strip():
-            client_kwargs["default_headers"] = {
-                "anthropic-workspace-id": ANTHROPIC_WORKSPACE_ID
-            }
+        if (JARVIS_DEV_MODE or not ANTHROPIC_API_KEY or anthropic is None) and USE_LOCAL_MODEL:
+            try:
+                self.client = OllamaClient(base_url=OLLAMA_BASE_URL, model=OLLAMA_MODEL)
+                self.client._is_available()
+            except Exception:
+                self.client = MockClient()
+        elif JARVIS_DEV_MODE or not ANTHROPIC_API_KEY or anthropic is None:
+            self.client = MockClient()
+        else:
+            client_kwargs = {"api_key": ANTHROPIC_API_KEY}
+            if ANTHROPIC_WORKSPACE_ID and ANTHROPIC_WORKSPACE_ID.strip():
+                client_kwargs["default_headers"] = {
+                    "anthropic-workspace-id": ANTHROPIC_WORKSPACE_ID
+                }
+            self.client = anthropic.Anthropic(**client_kwargs)
 
-        self.client = anthropic.Anthropic(**client_kwargs)
         self.messages: List[Dict[str, Any]] = []
 
     def clear_history(self) -> None:
@@ -98,10 +116,22 @@ class Jarvis:
                     messages=self.messages,
                     tools=tools,
                 )
-            except anthropic.APIError as err:
-                return f"Anthropic API Error: {err.message}"
             except Exception as err:
-                return f"Unexpected Error communicating with API: {str(err)}"
+                if self.client.__class__.__name__ == "OllamaClient":
+                    self.client = MockClient()
+                    response = self.client.messages.create(
+                        model=MODEL,
+                        max_tokens=MAX_TOKENS,
+                        system=system_prompt,
+                        messages=self.messages,
+                        tools=tools,
+                    )
+                else:
+                    if hasattr(err, "message") and getattr(err, "message"):
+                        return f"Anthropic API Error: {err.message}"
+                    if self.client.__class__.__name__ == "MockClient":
+                        return "Jarvis is running in offline mode and cannot access the external API."
+                    return f"Unexpected Error communicating with API: {str(err)}"
 
             # Save assistant response
             self.messages.append({

@@ -4,6 +4,7 @@ import asyncio
 import os
 import threading
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -16,16 +17,27 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from agent.agents.orchestrator import get_orchestrator
 from agent.core import Jarvis
+from autonomous.engine import get_mission_runner
+from autonomous.scheduler import get_scheduler
 from config import MODEL, PROJECT_ROOT
 from memory.calendar_manager import CalendarManager
 from memory.manager import MemoryManager
+from notifications.manager import get_notification_manager
 from tools.analysis import analyze_codebase
-from tools.filesystem import list_directory, read_file
+from tools.filesystem import (
+    copy_file,
+    create_directory,
+    delete_file,
+    edit_file,
+    list_directory,
+    move_file,
+    read_file,
+    write_file,
+)
 from tools.registry import execute_tool, get_all_tool_schemas, get_registered_tools
 from tools.web_search import search_web
-
-from contextlib import asynccontextmanager
 
 
 @asynccontextmanager
@@ -40,7 +52,7 @@ async def lifespan(app: FastAPI):
 
 
 # Initialize app
-app = FastAPI(title="JARVIS AI Assistant System", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="JARVIS AI Assistant System", version="0.3.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,6 +66,11 @@ app.add_middleware(
 jarvis_agent = Jarvis()
 memory_manager = MemoryManager()
 calendar_manager = CalendarManager()
+agent_orchestrator = get_orchestrator()
+task_scheduler = get_scheduler()
+mission_runner = get_mission_runner()
+notification_manager = get_notification_manager()
+
 SERVER_START_TIME = time.time()
 ACTIVE_TOOL_LOGS: List[Dict[str, Any]] = []
 
@@ -62,18 +79,33 @@ _worker_running = True
 
 
 def background_reminder_worker():
-    """Continuously monitor and trigger pending reminders."""
+    """Continuously monitor and trigger pending reminders and autonomous tasks."""
     while _worker_running:
         try:
             triggered = calendar_manager.check_pending_reminders()
             for item in triggered:
-                print(f"\n[ALERT] REMINDER TRIGGERED: {item.get('title')} ({item.get('remind_at')})")
+                title = item.get("title", "Reminder")
+                note = item.get("note", "")
+                print(f"\n[ALERT] REMINDER TRIGGERED: {title} ({item.get('remind_at')})")
+                notification_manager.notify(
+                    title=f"Reminder: {title}",
+                    message=note or f"Scheduled alert for {title}",
+                    level="alert",
+                    source="calendar_reminder",
+                    desktop_alert=True,
+                )
         except Exception:
             pass
+
+        try:
+            task_scheduler.check_and_run_due_tasks()
+        except Exception:
+            pass
+
         time.sleep(10)
 
 
-# Models
+# --- Request Models ---
 class ChatRequest(BaseModel):
     message: str
 
@@ -113,12 +145,65 @@ class ReadFileRequest(BaseModel):
     end_line: Optional[int] = None
 
 
+class WriteFileRequest(BaseModel):
+    path: str
+    content: str
+    overwrite: bool = True
+
+
+class EditFileRequest(BaseModel):
+    path: str
+    target_content: str
+    replacement_content: str
+    start_line: Optional[int] = None
+    end_line: Optional[int] = None
+
+
+class DeleteFileRequest(BaseModel):
+    path: str
+
+
+class MkdirRequest(BaseModel):
+    path: str
+
+
+class AgentDelegateRequest(BaseModel):
+    agent_name: str
+    task: str
+    context: Optional[str] = None
+
+
+class AgentWorkflowRequest(BaseModel):
+    goal: str
+    workflow_type: str = "full"
+
+
+class ScheduledTaskRequest(BaseModel):
+    name: str
+    goal: str
+    schedule_type: str = "interval"
+    interval_minutes: int = 60
+    run_at: Optional[str] = None
+
+
+class AutonomousMissionRequest(BaseModel):
+    goal: str
+    max_steps: int = 5
+
+
+class NotificationCreateRequest(BaseModel):
+    title: str
+    message: str
+    level: str = "info"
+    desktop_alert: bool = True
+
+
 # --- API Endpoints ---
 
 @app.get("/api/health")
 def health_check():
     """Health check endpoint."""
-    return {"status": "online", "model": MODEL, "version": "0.2.0"}
+    return {"status": "online", "model": MODEL, "version": "0.3.0"}
 
 
 @app.post("/api/chat")
@@ -168,15 +253,13 @@ def get_memory():
 @app.post("/api/memory")
 def add_memory(req: MemoryItemRequest):
     """Store new memory item."""
-    res = memory_manager.remember(category=req.category, item=req.content)
-    return res
+    return memory_manager.remember(category=req.category, item=req.content)
 
 
 @app.delete("/api/memory")
 def delete_memory(req: MemoryDeleteRequest):
     """Delete a memory item."""
-    res = memory_manager.forget(category=req.category, item_or_index=req.item_or_index)
-    return res
+    return memory_manager.forget(category=req.category, item_or_index=req.item_or_index)
 
 
 # --- Calendar & Reminders Endpoints ---
@@ -191,14 +274,13 @@ def get_events(start_date: Optional[str] = None, end_date: Optional[str] = None,
 @app.post("/api/calendar/events")
 def create_event(req: CalendarEventRequest):
     """Create a new calendar event."""
-    res = calendar_manager.add_event(
+    return calendar_manager.add_event(
         title=req.title,
         date=req.date,
         time=req.time,
         description=req.description,
         category=req.category,
     )
-    return res
 
 
 @app.delete("/api/calendar/events/{event_id}")
@@ -252,6 +334,135 @@ def read_project_file(req: ReadFileRequest):
     return read_file(path=req.path, start_line=req.start_line, end_line=req.end_line)
 
 
+@app.post("/api/project/write")
+def write_project_file(req: WriteFileRequest):
+    """Create or overwrite file."""
+    return write_file(path=req.path, content=req.content, overwrite=req.overwrite)
+
+
+@app.post("/api/project/edit")
+def edit_project_file(req: EditFileRequest):
+    """Surgically edit file content."""
+    return edit_file(
+        path=req.path,
+        target_content=req.target_content,
+        replacement_content=req.replacement_content,
+        start_line=req.start_line,
+        end_line=req.end_line,
+    )
+
+
+@app.delete("/api/project/delete")
+def delete_project_file(req: DeleteFileRequest):
+    """Safely delete file."""
+    return delete_file(path=req.path)
+
+
+@app.post("/api/project/mkdir")
+def create_project_dir(req: MkdirRequest):
+    """Create a new directory."""
+    return create_directory(path=req.path)
+
+
+# --- AI Agents Endpoints ---
+
+@app.get("/api/agents")
+def list_agents_endpoint():
+    """List available specialized AI subagents."""
+    return {"success": True, "agents": agent_orchestrator.list_agents()}
+
+
+@app.post("/api/agents/delegate")
+def delegate_to_agent(req: AgentDelegateRequest):
+    """Delegate a task to a specialized agent."""
+    res = agent_orchestrator.delegate(agent_name=req.agent_name, task=req.task, context=req.context)
+    return res
+
+
+@app.post("/api/agents/workflow")
+def run_agent_workflow(req: AgentWorkflowRequest):
+    """Run collaborative multi-agent workflow."""
+    return agent_orchestrator.run_collaborative_workflow(goal=req.goal, workflow_type=req.workflow_type)
+
+
+# --- Autonomous Tasks & Missions Endpoints ---
+
+@app.get("/api/autonomous/tasks")
+def list_autonomous_tasks(status: Optional[str] = None):
+    """List scheduled autonomous tasks."""
+    return {"success": True, "tasks": task_scheduler.list_tasks(status=status)}
+
+
+@app.post("/api/autonomous/tasks")
+def create_autonomous_task(req: ScheduledTaskRequest):
+    """Schedule a new autonomous task."""
+    return task_scheduler.add_task(
+        name=req.name,
+        goal=req.goal,
+        schedule_type=req.schedule_type,
+        interval_minutes=req.interval_minutes,
+        run_at=req.run_at,
+    )
+
+
+@app.delete("/api/autonomous/tasks/{task_id}")
+def cancel_autonomous_task(task_id: str):
+    """Cancel a scheduled autonomous task."""
+    return task_scheduler.cancel_task(task_id=task_id)
+
+
+@app.post("/api/autonomous/run")
+def run_autonomous_now(req: AutonomousMissionRequest):
+    """Run an autonomous mission immediately."""
+    return mission_runner.run_mission(goal=req.goal, max_steps=req.max_steps, notify_on_complete=True)
+
+
+# --- Notifications Endpoints ---
+
+@app.get("/api/notifications")
+def get_notifications(unread_only: bool = False, limit: int = 50):
+    """List notifications."""
+    items = notification_manager.list_notifications(unread_only=unread_only, limit=limit)
+    return {
+        "success": True,
+        "unread_count": notification_manager.get_unread_count(),
+        "notifications": items,
+    }
+
+
+@app.post("/api/notifications")
+def create_notification(req: NotificationCreateRequest):
+    """Dispatch a notification."""
+    return notification_manager.notify(
+        title=req.title,
+        message=req.message,
+        level=req.level,
+        source="api_client",
+        desktop_alert=req.desktop_alert,
+    )
+
+
+@app.post("/api/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: str):
+    """Mark a notification as read."""
+    found = notification_manager.mark_as_read(notification_id)
+    return {"success": found}
+
+
+@app.post("/api/notifications/read-all")
+def mark_all_notifications_read():
+    """Mark all notifications as read."""
+    count = notification_manager.mark_all_as_read()
+    return {"success": True, "marked_count": count}
+
+
+@app.delete("/api/notifications")
+def clear_all_notifications():
+    """Clear all notifications."""
+    notification_manager.clear_notifications()
+    return {"success": True, "message": "All notifications cleared."}
+
+
 # --- Web Search Endpoint ---
 
 @app.post("/api/search")
@@ -282,6 +493,7 @@ def get_system_stats():
             "model": MODEL,
             "threads": threading.active_count(),
             "recent_tool_calls": ACTIVE_TOOL_LOGS[:10],
+            "unread_notifications": notification_manager.get_unread_count(),
         }
     except Exception as exc:
         return {"success": False, "error": str(exc)}
@@ -317,7 +529,6 @@ def serve_dashboard():
         with open(index_file, "r", encoding="utf-8") as f:
             return f.read()
     return "<h1>Jarvis Dashboard Loading...</h1>"
-
 
 
 if __name__ == "__main__":

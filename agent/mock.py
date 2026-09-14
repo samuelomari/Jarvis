@@ -6,15 +6,20 @@ from typing import Any, Dict, List
 
 class MockMessage:
     """Mock response from Claude."""
-    
-    def __init__(self, content: str, stop_reason: str = "end_turn"):
-        self.content = [MockTextBlock(content)]
+
+    def __init__(self, content: Any, stop_reason: str = "end_turn"):
+        if isinstance(content, list):
+            self.content = content
+        elif isinstance(content, str):
+            self.content = [MockTextBlock(content)]
+        else:
+            self.content = [content]
         self.stop_reason = stop_reason
 
 
 class MockTextBlock:
     """Mock text response block."""
-    
+
     def __init__(self, text: str):
         self.type = "text"
         self.text = text
@@ -22,61 +27,67 @@ class MockTextBlock:
 
 class MockToolBlock:
     """Mock tool use block."""
-    
+
     def __init__(self, tool_name: str, tool_input: Dict[str, Any]):
         self.type = "tool_use"
         self.name = tool_name
         self.input = tool_input
-        self.id = f"tool_{tool_name}_{hash(str(tool_input)) % 100000}"
+        self.id = f"tool_{tool_name}_{abs(hash(str(tool_input))) % 100000}"
 
 
 class MockClient:
     """Mock Anthropic client for dev mode."""
-    
+
     def __init__(self):
         self.messages_sent = []
         self.call_count = 0
-    
+
+    @property
     def messages(self):
         """Return mock message creation interface."""
         return self
-    
+
     def create(self, **kwargs) -> MockMessage:
         """Create a mock response based on user input."""
         self.call_count += 1
         self.messages_sent.append(kwargs)
-        
-        # Extract user's last message
+
         messages = kwargs.get("messages", [])
+        if not messages:
+            return MockMessage("Hello! How can I assist you today?", stop_reason="end_turn")
+
+        last_msg = messages[-1]
+
+        # Check if the last turn returned tool results
+        if isinstance(last_msg.get("content"), list):
+            tool_results = [
+                b.get("content", "")
+                for b in last_msg["content"]
+                if isinstance(b, dict) and b.get("type") == "tool_result"
+            ]
+            if tool_results:
+                return MockMessage(
+                    f"Tool output: {', '.join(tool_results)}",
+                    stop_reason="end_turn",
+                )
+
         user_message = ""
-        
-        if messages:
-            last_msg = messages[-1]
-            if isinstance(last_msg.get("content"), str):
-                user_message = last_msg["content"]
-            elif isinstance(last_msg.get("content"), list):
-                for block in last_msg["content"]:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        user_message = block.get("text", "")
-        
-        user_message = user_message.lower()
-        
+        if isinstance(last_msg.get("content"), str):
+            user_message = last_msg["content"]
+
+        user_message_lower = user_message.lower()
+
         # Smart mock responses based on user input
-        if "time" in user_message or "current" in user_message:
-            # Request the time tool
+        if "time" in user_message_lower or "current" in user_message_lower:
             return MockMessage(
-                json.dumps({
-                    "type": "tool_use",
-                    "id": "tool_time_1",
-                    "name": "get_current_time",
-                    "input": {}
-                }),
-                stop_reason="tool_use"
+                [MockToolBlock("get_current_time", {})],
+                stop_reason="tool_use",
             )
         
-        elif "memory" in user_message or "remember" in user_message:
+        elif "memory" in user_message_lower or "remember" in user_message_lower:
             return MockMessage(
-                "I can help you remember things. What would you like me to remember?",
+                "I can help you remember things. What would you like me to remember? "
+                "This is offline mode, so no paid API is being used.",
                 stop_reason="end_turn"
             )
         
@@ -106,7 +117,7 @@ class MockClient:
                 "- Analyzing your projects and files\n"
                 "- Searching for information\n"
                 "- Remembering important details\n\n"
-                "What can I help you with?",
+                "I'm currently running in offline mode, so no paid API key is required.",
                 stop_reason="end_turn"
             )
         
@@ -126,7 +137,7 @@ class MockClient:
             # Generic helpful response
             return MockMessage(
                 f"I understand you're asking about: '{user_message}'. "
-                "I'm in development mode with mock responses. "
-                "To enable real Claude API responses, configure ANTHROPIC_API_KEY and JARVIS_DEV_MODE=false in .env",
+                "I'm in offline mode with local mock responses. "
+                "No paid API key is required while JARVIS_DEV_MODE is enabled.",
                 stop_reason="end_turn"
             )

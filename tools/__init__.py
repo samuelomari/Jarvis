@@ -14,6 +14,10 @@ from tools import filesystem
 from tools import analysis
 from tools import web_search
 from tools import calendar_tools
+from tools import agent_tools
+from tools import autonomous_tools
+from tools import notification_tools
+from tools import integrations
 
 __all__ = [
     "register_tool",
@@ -26,4 +30,9 @@ __all__ = [
     "analysis",
     "web_search",
     "calendar_tools",
+    "agent_tools",
+    "autonomous_tools",
+    "notification_tools",
+    "integrations",
 ]
+

@@ -2,6 +2,7 @@
 
 import fnmatch
 import os
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from tools.registry import register_tool
@@ -295,4 +296,260 @@ def search_files(
         }
     except Exception as exc:
         return {"success": False, "error": f"Failed searching files: {str(exc)}"}
+
+
+@register_tool({
+    "name": "edit_file",
+    "description": "Surgically edit a file in the workspace by replacing target_content with replacement_content. Optionally constrain search within start_line and end_line.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Path of the file to edit.",
+            },
+            "target_content": {
+                "type": "string",
+                "description": "The exact string or lines to replace in the file.",
+            },
+            "replacement_content": {
+                "type": "string",
+                "description": "The new replacement text.",
+            },
+            "start_line": {
+                "type": "integer",
+                "description": "Optional starting line number (1-indexed) to scope the search.",
+            },
+            "end_line": {
+                "type": "integer",
+                "description": "Optional ending line number (1-indexed, inclusive) to scope the search.",
+            },
+        },
+        "required": ["path", "target_content", "replacement_content"],
+    },
+})
+def edit_file(
+    path: str,
+    target_content: str,
+    replacement_content: str,
+    start_line: Optional[int] = None,
+    end_line: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Replace target text in a file safely."""
+    try:
+        safe_path = _resolve_safe_path(path)
+        if not safe_path.exists():
+            return {"success": False, "error": f"File not found: {path}"}
+        if not safe_path.is_file():
+            return {"success": False, "error": f"Path is not a file: {path}"}
+
+        with open(safe_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+
+        if start_line is not None or end_line is not None:
+            lines = content.splitlines(keepends=True)
+            total_lines = len(lines)
+            s_line = max(1, start_line) if start_line is not None else 1
+            e_line = min(total_lines, end_line) if end_line is not None else total_lines
+
+            if s_line > total_lines:
+                return {"success": False, "error": f"start_line ({s_line}) exceeds total lines ({total_lines})."}
+
+            prefix = "".join(lines[:s_line - 1])
+            window = "".join(lines[s_line - 1:e_line])
+            suffix = "".join(lines[e_line:])
+
+            count = window.count(target_content)
+            if count == 0:
+                return {"success": False, "error": f"Target content not found within lines {s_line}-{e_line}."}
+            if count > 1:
+                return {"success": False, "error": f"Target content found {count} times within lines {s_line}-{e_line}. Please narrow the range or use unique target text."}
+
+            new_window = window.replace(target_content, replacement_content, 1)
+            new_content = prefix + new_window + suffix
+        else:
+            count = content.count(target_content)
+            if count == 0:
+                return {"success": False, "error": "Target content not found in file."}
+            if count > 1:
+                return {"success": False, "error": f"Target content found {count} times in file. Please specify start_line/end_line or provide more unique surrounding text."}
+
+            new_content = content.replace(target_content, replacement_content, 1)
+
+        with open(safe_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+
+        return {
+            "success": True,
+            "message": f"Successfully edited '{path}'.",
+            "path": str(safe_path.relative_to(PROJECT_ROOT)),
+        }
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to edit file: {str(exc)}"}
+
+
+@register_tool({
+    "name": "append_file",
+    "description": "Append text content to the end of a file in the workspace. Creates file if it does not exist.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Path of the file to append to.",
+            },
+            "content": {
+                "type": "string",
+                "description": "Text content to append.",
+            },
+        },
+        "required": ["path", "content"],
+    },
+})
+def append_file(path: str, content: str) -> Dict[str, Any]:
+    """Append text content to a file."""
+    try:
+        safe_path = _resolve_safe_path(path)
+        safe_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(safe_path, "a", encoding="utf-8") as f:
+            f.write(content)
+        return {
+            "success": True,
+            "message": f"Successfully appended {len(content)} characters to '{path}'.",
+            "path": str(safe_path.relative_to(PROJECT_ROOT)),
+        }
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to append to file: {str(exc)}"}
+
+
+@register_tool({
+    "name": "delete_file",
+    "description": "Safely delete a file in the workspace.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Path of the file to delete.",
+            },
+        },
+        "required": ["path"],
+    },
+})
+def delete_file(path: str) -> Dict[str, Any]:
+    """Delete a file safely."""
+    try:
+        safe_path = _resolve_safe_path(path)
+        if not safe_path.exists():
+            return {"success": False, "error": f"File not found: {path}"}
+        if safe_path.is_dir():
+            return {"success": False, "error": f"Path is a directory, not a file: {path}"}
+
+        # Guard critical files
+        rel_str = str(safe_path.relative_to(PROJECT_ROOT))
+        protected = {".env", ".gitignore", "SYSTEM.md", "README.md", "main.py", "config.py", "server.py", "daemon.py"}
+        if rel_str in protected or rel_str.startswith(".git/"):
+            return {"success": False, "error": f"Cannot delete protected core project file: {rel_str}"}
+
+        safe_path.unlink()
+        return {
+            "success": True,
+            "message": f"Successfully deleted '{path}'.",
+            "path": rel_str,
+        }
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to delete file: {str(exc)}"}
+
+
+@register_tool({
+    "name": "copy_file",
+    "description": "Copy a file from source_path to destination_path within the workspace.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "source_path": {"type": "string", "description": "Source file path."},
+            "destination_path": {"type": "string", "description": "Destination file path."},
+            "overwrite": {"type": "boolean", "description": "Whether to overwrite if destination exists (default: false)."},
+        },
+        "required": ["source_path", "destination_path"],
+    },
+})
+def copy_file(source_path: str, destination_path: str, overwrite: bool = False) -> Dict[str, Any]:
+    """Copy a file within the workspace."""
+    try:
+        src = _resolve_safe_path(source_path)
+        dst = _resolve_safe_path(destination_path)
+        if not src.exists() or not src.is_file():
+            return {"success": False, "error": f"Source file does not exist: {source_path}"}
+        if dst.exists() and not overwrite:
+            return {"success": False, "error": f"Destination file already exists: {destination_path}. Set overwrite=True."}
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        return {
+            "success": True,
+            "message": f"Successfully copied '{source_path}' to '{destination_path}'.",
+            "source": str(src.relative_to(PROJECT_ROOT)),
+            "destination": str(dst.relative_to(PROJECT_ROOT)),
+        }
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to copy file: {str(exc)}"}
+
+
+@register_tool({
+    "name": "move_file",
+    "description": "Move or rename a file from source_path to destination_path within the workspace.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "source_path": {"type": "string", "description": "Source file path."},
+            "destination_path": {"type": "string", "description": "Destination file path."},
+            "overwrite": {"type": "boolean", "description": "Whether to overwrite if destination exists (default: false)."},
+        },
+        "required": ["source_path", "destination_path"],
+    },
+})
+def move_file(source_path: str, destination_path: str, overwrite: bool = False) -> Dict[str, Any]:
+    """Move or rename a file within the workspace."""
+    try:
+        src = _resolve_safe_path(source_path)
+        dst = _resolve_safe_path(destination_path)
+        if not src.exists() or not src.is_file():
+            return {"success": False, "error": f"Source file does not exist: {source_path}"}
+        if dst.exists() and not overwrite:
+            return {"success": False, "error": f"Destination file already exists: {destination_path}. Set overwrite=True."}
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(src, dst)
+        return {
+            "success": True,
+            "message": f"Successfully moved '{source_path}' to '{destination_path}'.",
+            "source": str(src.relative_to(PROJECT_ROOT)),
+            "destination": str(dst.relative_to(PROJECT_ROOT)),
+        }
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to move file: {str(exc)}"}
+
+
+@register_tool({
+    "name": "create_directory",
+    "description": "Create a new directory (and intermediate parent directories) in the workspace.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Directory path to create."},
+        },
+        "required": ["path"],
+    },
+})
+def create_directory(path: str) -> Dict[str, Any]:
+    """Create a new directory."""
+    try:
+        target_dir = _resolve_safe_path(path)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return {
+            "success": True,
+            "message": f"Directory '{path}' is ready.",
+            "path": str(target_dir.relative_to(PROJECT_ROOT)) if target_dir != PROJECT_ROOT else ".",
+        }
+    except Exception as exc:
+        return {"success": False, "error": f"Failed to create directory: {str(exc)}"}
 

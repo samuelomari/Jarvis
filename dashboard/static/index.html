@@ -33,6 +33,9 @@
       </div>
 
       <div class="quick-telemetry">
+        <div class="telem-chip notification-chip" id="chip-notifications" title="Notifications" style="cursor: pointer;">
+          <i data-lucide="bell"></i> <span id="header-notif-count">0</span>
+        </div>
         <div class="telem-chip" id="chip-time">
           <i data-lucide="clock"></i> <span id="header-clock">--:--:--</span>
         </div>
@@ -49,6 +52,9 @@
     <nav class="hud-nav">
       <button class="nav-tab active" data-tab="chat-view">
         <i data-lucide="bot"></i> <span>Terminal Chat</span>
+      </button>
+      <button class="nav-tab" data-tab="agents-view">
+        <i data-lucide="users"></i> <span>Agents & Missions</span>
       </button>
       <button class="nav-tab" data-tab="memory-view">
         <i data-lucide="brain"></i> <span>Memory Matrix</span>
@@ -116,6 +122,49 @@
         </div>
       </section>
 
+      <!-- TAB: AI SUBAGENTS & AUTONOMOUS MISSIONS -->
+      <section id="agents-view" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2><i data-lucide="users"></i> AI Subagents & Autonomous Operations</h2>
+            <p class="subtitle">Specialized AI workforce, collaborative pipelines, and self-directed background missions</p>
+          </div>
+          <div class="header-buttons">
+            <button id="btn-new-mission-modal" class="btn-primary"><i data-lucide="plus-circle"></i> Schedule Mission</button>
+            <button id="btn-refresh-agents" class="btn-secondary"><i data-lucide="rotate-cw"></i> Refresh</button>
+          </div>
+        </div>
+
+        <div class="agents-card-grid" id="agents-grid">
+          <!-- Populated by JS -->
+        </div>
+
+        <div class="workflow-runner-card">
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h3><i data-lucide="cpu"></i> Multi-Agent Collaborative Pipeline</h3>
+            <span class="badge">Planner &rarr; Worker &rarr; Reviewer</span>
+          </div>
+          <form id="form-run-workflow" class="workflow-form">
+            <input type="text" id="workflow-goal-input" placeholder="Enter objective (e.g. Audit security in tools and propose refactoring)..." required />
+            <button type="submit" class="btn-primary" id="btn-exec-workflow"><i data-lucide="play"></i> Launch Multi-Agent Workflow</button>
+          </form>
+          <div id="workflow-output-area" class="workflow-output" style="display: none;">
+            <h4>Pipeline Execution Report:</h4>
+            <div id="workflow-report-content" class="report-content"></div>
+          </div>
+        </div>
+
+        <div class="missions-section">
+          <div class="section-title-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3><i data-lucide="clock"></i> Scheduled Autonomous Background Missions</h3>
+            <button id="btn-run-mission-now" class="btn-secondary btn-sm"><i data-lucide="zap"></i> Run Mission Now</button>
+          </div>
+          <div id="missions-list" class="items-list">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </section>
+
       <!-- TAB 2: MEMORY MATRIX -->
       <section id="memory-view" class="tab-pane">
         <div class="pane-header">
@@ -172,7 +221,11 @@
             <h2><i data-lucide="code-2"></i> Codebase Architecture & Files</h2>
             <p class="subtitle">Static analysis, AST parsing, and live workspace explorer</p>
           </div>
-          <button id="btn-refresh-code" class="btn-secondary"><i data-lucide="rotate-cw"></i> Refresh</button>
+          <div class="header-buttons">
+            <button id="btn-new-file-modal" class="btn-primary"><i data-lucide="file-plus"></i> New File</button>
+            <button id="btn-edit-file-modal" class="btn-secondary"><i data-lucide="file-edit"></i> Edit File</button>
+            <button id="btn-refresh-code" class="btn-secondary"><i data-lucide="rotate-cw"></i> Refresh</button>
+          </div>
         </div>
 
         <div class="code-stats-grid" id="code-stats-cards">
@@ -185,8 +238,9 @@
             <pre id="code-tree" class="tree-pre">Loading...</pre>
           </div>
           <div class="file-preview-panel">
-            <div class="file-preview-header">
+            <div class="file-preview-header" style="display: flex; justify-content: space-between; align-items: center;">
               <span id="preview-filename"><i data-lucide="file-text"></i> Select a file or top file</span>
+              <button id="btn-quick-edit-preview" class="btn-secondary btn-sm" style="display: none;"><i data-lucide="file-edit"></i> Edit This File</button>
             </div>
             <pre id="code-preview" class="file-preview-pre">Click any top file above to inspect content.</pre>
           </div>
@@ -362,6 +416,89 @@
         <div class="modal-footer">
           <button type="button" class="btn-secondary btn-close-modal">Cancel</button>
           <button type="submit" class="btn-primary">Set Reminder</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NOTIFICATIONS CENTER -->
+  <div id="modal-notifications" class="hud-modal">
+    <div class="modal-card" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3><i data-lucide="bell"></i> System & Autonomous Notifications</h3>
+        <button class="btn-close-modal">&times;</button>
+      </div>
+      <div class="notif-controls" style="display: flex; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--border-cyan);">
+        <button id="btn-notif-mark-read" class="btn-secondary btn-sm"><i data-lucide="check-check"></i> Mark All Read</button>
+        <button id="btn-notif-clear" class="btn-secondary btn-sm"><i data-lucide="trash-2"></i> Clear History</button>
+      </div>
+      <div id="notifications-list" class="items-list" style="max-height: 400px; overflow-y: auto; padding: 14px 18px;">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: FILE CREATE / EDIT -->
+  <div id="modal-file-edit" class="hud-modal">
+    <div class="modal-card" style="max-width: 720px;">
+      <div class="modal-header">
+        <h3 id="modal-file-title"><i data-lucide="file-edit"></i> Create / Edit File</h3>
+        <button class="btn-close-modal">&times;</button>
+      </div>
+      <form id="form-file-edit">
+        <div class="form-group">
+          <label>File Path (relative to workspace root)</label>
+          <input type="text" id="file-edit-path" placeholder="e.g. notes.txt or scripts/deploy.py" required />
+        </div>
+        <div class="form-group">
+          <label>File Content</label>
+          <textarea id="file-edit-content" rows="12" style="font-family: 'Fira Code', monospace; font-size: 13px;" placeholder="Enter file content..." required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary btn-close-modal">Cancel</button>
+          <button type="submit" class="btn-primary" id="btn-save-file">Save File</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: SCHEDULE MISSION -->
+  <div id="modal-schedule-mission" class="hud-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i data-lucide="clock"></i> Schedule Autonomous Mission</h3>
+        <button class="btn-close-modal">&times;</button>
+      </div>
+      <form id="form-add-mission">
+        <div class="form-group">
+          <label>Mission Name</label>
+          <input type="text" id="mission-input-name" placeholder="e.g. Morning Codebase Health Check" required />
+        </div>
+        <div class="form-group">
+          <label>Autonomous Goal / Objective</label>
+          <textarea id="mission-input-goal" rows="3" placeholder="Specify what Jarvis should accomplish autonomously..." required></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Schedule Type</label>
+            <select id="mission-input-type">
+              <option value="interval">Every N Minutes</option>
+              <option value="daily">Daily at HH:MM</option>
+              <option value="once">One-Shot at Date/Time</option>
+            </select>
+          </div>
+          <div class="form-group" id="group-mission-interval">
+            <label>Interval (Minutes)</label>
+            <input type="number" id="mission-input-interval" value="60" min="5" />
+          </div>
+          <div class="form-group" id="group-mission-time" style="display: none;">
+            <label>Time / Date</label>
+            <input type="text" id="mission-input-time" placeholder="09:00 or 2026-09-15 10:00" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary btn-close-modal">Cancel</button>
+          <button type="submit" class="btn-primary">Schedule Mission</button>
         </div>
       </form>
     </div>

@@ -53,6 +53,9 @@ def print_help():
         table.add_column("Command", style="bold green")
         table.add_column("Description", style="white")
         table.add_row("/help", "Show this help table")
+        table.add_row("/agents", "List specialized AI subagents (Coder, Researcher, Planner, Reviewer)")
+        table.add_row("/autonomous", "Inspect scheduled background missions")
+        table.add_row("/notifications", "View notifications and alerts")
         table.add_row("/memory", "Inspect all long-term memories")
         table.add_row("/tools", "List all registered tools and descriptions")
         table.add_row("/dashboard", "Launch or display the Cyber Web Dashboard")
@@ -61,11 +64,14 @@ def print_help():
         console.print(table)
     else:
         print("\nCommands:")
-        print("  /help   - Show help")
-        print("  /memory - View long-term memory")
-        print("  /tools  - List registered tools")
-        print("  /clear  - Clear conversation history")
-        print("  /exit   - Quit\n")
+        print("  /help          - Show help")
+        print("  /agents        - View specialized AI subagents")
+        print("  /autonomous    - View scheduled autonomous missions")
+        print("  /notifications - View alerts and notifications")
+        print("  /memory        - View long-term memory")
+        print("  /tools         - List registered tools")
+        print("  /clear         - Clear conversation history")
+        print("  /exit          - Quit\n")
 
 
 def print_tools():
@@ -117,6 +123,68 @@ def print_memory(jarvis: Jarvis):
         print()
 
 
+def print_agents():
+    """Display available AI Subagents."""
+    from agent.agents.orchestrator import get_orchestrator
+    agents = get_orchestrator().list_agents()
+    if HAS_RICH:
+        table = Table(title=f"Specialized AI Subagents ({len(agents)})", border_style="bold magenta")
+        table.add_column("Agent", style="bold magenta")
+        table.add_column("Role", style="bold cyan")
+        table.add_column("Description", style="white")
+        for a in agents:
+            table.add_row(a["name"], a["role"], a["description"])
+        console.print(table)
+    else:
+        print("\nSpecialized AI Subagents:")
+        for a in agents:
+            print(f"  - {a['name']} ({a['role']}): {a['description']}")
+        print()
+
+
+def print_autonomous():
+    """Display scheduled autonomous missions."""
+    from autonomous.scheduler import get_scheduler
+    tasks = get_scheduler().list_tasks()
+    if HAS_RICH:
+        table = Table(title=f"Scheduled Autonomous Missions ({len(tasks)})", border_style="bold green")
+        table.add_column("ID", style="dim", width=12)
+        table.add_column("Name", style="bold white")
+        table.add_column("Type", style="cyan")
+        table.add_column("Next Run", style="yellow")
+        table.add_column("Runs", style="green", justify="right")
+        for t in tasks:
+            table.add_row(t["id"], t["name"], t["schedule_type"], str(t.get("next_run", "N/A"))[:19], str(t.get("run_count", 0)))
+        console.print(table)
+    else:
+        print("\nScheduled Autonomous Missions:")
+        for t in tasks:
+            print(f"  [{t['id']}] {t['name']} ({t['schedule_type']}) - Next: {t.get('next_run', 'N/A')}")
+        print()
+
+
+def print_notifications():
+    """Display recent notifications."""
+    from notifications.manager import get_notification_manager
+    mgr = get_notification_manager()
+    items = mgr.list_notifications(limit=10)
+    unread = mgr.get_unread_count()
+    if HAS_RICH:
+        table = Table(title=f"Recent Notifications ({len(items)}, {unread} unread)", border_style="bold yellow")
+        table.add_column("Time", style="dim", width=19)
+        table.add_column("Level", style="cyan", width=8)
+        table.add_column("Title", style="bold white")
+        table.add_column("Message", style="dim white")
+        for n in items:
+            table.add_row(n["timestamp"][:19], n["level"].upper(), n["title"], n["message"][:60])
+        console.print(table)
+    else:
+        print(f"\nRecent Notifications ({unread} unread):")
+        for n in items:
+            print(f"  [{n['timestamp'][:19]}] [{n['level'].upper()}] {n['title']}: {n['message'][:60]}")
+        print()
+
+
 def on_tool_executed(name: str, args: dict, result: dict):
     """Callback hook to print tool execution activity in the terminal."""
     args_summary = ", ".join(f"{k}={repr(v)[:40]}" for k, v in args.items())
@@ -158,6 +226,18 @@ def main():
                 print_tools()
                 continue
 
+            if cmd == "/agents":
+                print_agents()
+                continue
+
+            if cmd == "/autonomous":
+                print_autonomous()
+                continue
+
+            if cmd in ("/notifications", "/alerts"):
+                print_notifications()
+                continue
+
             if cmd == "/memory":
                 print_memory(jarvis)
                 continue
@@ -190,11 +270,12 @@ def main():
                 response = jarvis.chat(user_input, on_tool_call=on_tool_executed)
                 print(f"\nJarvis:\n{response}")
 
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, EOFError):
             if HAS_RICH:
-                console.print("\n[yellow]Session interrupted. Type /exit to quit.[/yellow]")
+                console.print("\n[cyan]Jarvis session closed. Goodbye![/cyan]")
             else:
-                print("\nSession interrupted. Type /exit to quit.")
+                print("\nJarvis session closed. Goodbye!")
+            break
         except Exception as error:
             if HAS_RICH:
                 console.print(f"\n[danger]Error:[/danger] {error}")
