@@ -3,6 +3,8 @@
 import json
 import os
 import tempfile
+import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -33,6 +35,7 @@ class MemoryManager:
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.file_path.exists() or self.file_path.stat().st_size == 0:
             initial_data = {category: [] for category in DEFAULT_CATEGORIES}
+            initial_data["tasks"] = []
             self._save_raw(initial_data)
 
     def load(self) -> Dict[str, List[Any]]:
@@ -50,6 +53,8 @@ class MemoryManager:
         for cat in DEFAULT_CATEGORIES:
             if cat not in data or not isinstance(data[cat], list):
                 data[cat] = []
+        if "tasks" not in data or not isinstance(data["tasks"], list):
+            data["tasks"] = []
 
         return data
 
@@ -186,15 +191,125 @@ class MemoryManager:
             "error": f"Could not find matching memory '{item_or_index}' in category '{category}'.",
         }
 
+    def add_task(self, title: str, description: str = "") -> Dict[str, Any]:
+        """Create a new pending task and persist it in the JSON store."""
+        task_title = (title or "").strip()
+        if not task_title:
+            return {"success": False, "error": "Task title cannot be empty."}
+
+        data = self.load()
+        task = {
+            "id": uuid.uuid4().hex[:12],
+            "title": task_title,
+            "description": description.strip(),
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "completed_at": None,
+        }
+        data.setdefault("tasks", []).append(task)
+        self._save_raw(data)
+        return {"success": True, "message": "Task created successfully.", "task": task}
+
+    def list_tasks(self, status: Optional[str] = None) -> Dict[str, Any]:
+        """Return all tasks, optionally filtered by status."""
+        data = self.load()
+        tasks = data.get("tasks", [])
+        if status:
+            tasks = [task for task in tasks if task.get("status") == status.lower()]
+        return {"success": True, "count": len(tasks), "tasks": tasks}
+
+    def complete_task(self, task_id: str) -> Dict[str, Any]:
+        """Mark a task as complete by its ID."""
+        data = self.load()
+        tasks = data.get("tasks", [])
+        for task in tasks:
+            if task.get("id") == task_id:
+                task["status"] = "completed"
+                task["completed_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+                self._save_raw(data)
+                return {"success": True, "message": "Task marked as completed.", "task": task}
+        return {"success": False, "error": f"No task found with id '{task_id}'."}
+
+    def daily_agenda(self, day: Optional[str] = None, calendar_manager: Optional[Any] = None) -> Dict[str, Any]:
+        """Build a summary for the day from tasks, events, and due reminders."""
+        target_day = day or datetime.utcnow().strftime("%Y-%m-%d")
+        data = self.load()
+        tasks = data.get("tasks", [])
+        matching_tasks = [
+            task for task in tasks if task.get("status") != "completed"
+        ]
+
+        summary_parts = [f"Agenda for {target_day}:"]
+        if matching_tasks:
+            summary_parts.append("Tasks:")
+            for task in matching_tasks:
+                summary_parts.append(f"- {task.get('title')} [{task.get('status', 'pending')}]")
+        else:
+            summary_parts.append("Tasks: none")
+
+        cal_data = {"events": [], "reminders": []}
+        if calendar_manager is None:
+            try:
+                from memory.calendar_manager import CalendarManager
+                calendar_manager = CalendarManager()
+            except ImportError:
+                calendar_manager = None
+
+        if calendar_manager is not None:
+            cal_data = calendar_manager.load()
+
+        events = cal_data.get("events", [])
+        day_events = [
+            event for event in events if str(event.get("date", "")) == target_day
+        ]
+        if day_events:
+            summary_parts.append("Events:")
+            for event in day_events:
+                when = f"{event.get('date')} {event.get('time', '09:00')}".strip()
+                summary_parts.append(f"- {event.get('title')} ({when})")
+        else:
+            summary_parts.append("Events: none")
+
+        reminders = cal_data.get("reminders", [])
+        pending_reminders = [
+            reminder for reminder in reminders
+            if reminder.get("status") in (None, "pending")
+            and str(reminder.get("remind_at", "")).startswith(target_day)
+        ]
+        if pending_reminders:
+            summary_parts.append("Reminders:")
+            for reminder in pending_reminders:
+                summary_parts.append(f"- {reminder.get('title')} ({reminder.get('remind_at')})")
+        else:
+            summary_parts.append("Reminders: none")
+
+        summary = "\n".join(summary_parts)
+        return {
+            "success": True,
+            "day": target_day,
+            "summary": summary,
+            "task_count": len(matching_tasks),
+            "event_count": len(day_events),
+            "reminder_count": len(pending_reminders),
+        }
+
     def get_summary(self) -> str:
         """Return a formatted string of non-empty memories for system prompt injection."""
         data = self.load()
         lines = []
         for cat, items in data.items():
+            if cat == "tasks":
+                continue
             if items:
                 formatted_cat = cat.replace("_", " ").title()
                 lines.append(f"### {formatted_cat}")
                 for idx, item in enumerate(items, 1):
                     lines.append(f"- {item}")
+        tasks = data.get("tasks", [])
+        if tasks:
+            lines.append("### Tasks")
+            for task in tasks:
+                status = task.get("status", "pending")
+                lines.append(f"- [{status}] {task.get('title')}" )
         return "\n".join(lines) if lines else "No active long-term memories."
 
