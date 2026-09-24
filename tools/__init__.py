@@ -18,6 +18,10 @@ from tools import agent_tools
 from tools import autonomous_tools
 from tools import notification_tools
 from tools import integrations
+from tools import computer_control
+from tools import developer_tools
+from tools import system_monitor
+from tools import vision_tools
 
 __all__ = [
     "register_tool",
@@ -34,5 +38,8 @@ __all__ = [
     "autonomous_tools",
     "notification_tools",
     "integrations",
+    "computer_control",
+    "developer_tools",
+    "system_monitor",
+    "vision_tools",
 ]
-

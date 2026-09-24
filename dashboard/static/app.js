@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMemory();
   initCalendar();
   initCodebase();
+  initDeveloperWorkflow();
   initWebSearch();
   initTelemetry();
   initNotifications();
@@ -26,6 +27,36 @@ function initLucide() {
   if (window.lucide) {
     window.lucide.createIcons();
   }
+}
+
+function initDeveloperWorkflow() {
+  const form = document.getElementById('developer-workflow-form');
+  if (!form) return;
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const output = document.getElementById('developer-workflow-output');
+    output.style.display = 'block';
+    output.innerHTML = '<p>Jarvis is inspecting the project...</p>';
+    try {
+      const response = await fetch('/api/developer/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: document.getElementById('developer-project-path').value.trim(),
+          run_tests: document.getElementById('developer-run-tests').checked,
+          install_dependencies: document.getElementById('developer-install').checked,
+          start_server: document.getElementById('developer-start').checked,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || data.message || 'Workflow failed');
+      output.innerHTML = data.steps.map(step =>
+        `<div class="tool-execution-card"><strong>${escapeHtml(step.name)}</strong>: ${step.skipped ? escapeHtml(step.reason) : step.planned ? escapeHtml(step.reason) : (step.success ? 'complete' : 'failed')} ${step.output ? `<pre>${escapeHtml(step.output)}</pre>` : ''}</div>`
+      ).join('');
+    } catch (error) {
+      output.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
+    }
+  });
 }
 
 // --- TAB SWITCHING ---
@@ -740,4 +771,3 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
-

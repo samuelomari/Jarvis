@@ -112,6 +112,20 @@ def test_project_stats_and_tree_endpoints(client):
     assert tree_resp.json()["success"] is True
 
 
+def test_developer_prepare_endpoint(client):
+    """Test the guarded developer workflow endpoint."""
+    response = client.post(
+        "/api/developer/prepare",
+        json={"path": ".", "run_tests": False},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["project"] == "."
+    assert data["failed_steps"] == []
+
+
 def test_system_stats_and_tools_endpoints(client):
     """Test system telemetry and tool list endpoints."""
     sys_resp = client.get("/api/system/stats")
@@ -242,5 +256,4 @@ def test_autonomous_and_notifications_endpoints(client):
     del_task = client.delete(f"/api/autonomous/tasks/{task_id}")
     assert del_task.status_code == 200
     assert del_task.json()["success"] is True
-
 

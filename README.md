@@ -238,10 +238,23 @@ Jarvis includes a modern Cybernetic Web Dashboard:
 - **Memory Matrix**: Visual categorized explorer for preferences, projects, goals, and facts with search and live CRUD.
 - **Agenda & Reminders Hub**: Interactive scheduler and alert center with real-time status chips.
 - **Codebase Analyzer**: Interactive project metrics, workspace tree, and live source previewer.
+- **Developer Mission**: Inspect a workspace, report Git status, optionally install dependencies, run tests, and plan server startup. Dependency installation is opt-in and server startup is reported as a plan rather than detached from the request.
 - **Web Research Hub**: Live DuckDuckGo search query panel and article extractor.
 - **System Telemetry**: Live CPU, RAM, disk gauges, server uptime, and active tool monitor.
 
 Voice input requires a browser with `SpeechRecognition` support and microphone permission. Use `localhost` or HTTPS where required by the browser. Speech recognition may send audio to a browser or browser-provider service; no audio is uploaded by Jarvis itself.
+
+### Developer Mission API
+
+The dashboard uses a guarded workflow endpoint for workspace-relative projects:
+
+```bash
+curl -X POST http://localhost:8000/api/developer/prepare \
+  -H 'Content-Type: application/json' \
+  -d '{"path": ".", "run_tests": true, "install_dependencies": false, "start_server": false}'
+```
+
+Set `install_dependencies` to `true` only after explicitly confirming that package installation is safe for the selected workspace. The workflow never launches a long-running server in the request; when `start_server` is enabled it returns a planned action for a later, supervised process lifecycle.
 
 ---
 
@@ -286,6 +299,7 @@ pytest tests/ -v
 - [x] **Stage 4**: Live Web Search & Webpage Extractor
 - [x] **Stage 5**: Calendar & Timed Reminders System
 - [x] **Stage 6-9**: Cybernetic Web Dashboard UI & Always-On Daemon
+- [x] **Developer Mission**: Guarded project inspection and test workflow
 
 ## Troubleshooting
 

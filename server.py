@@ -38,6 +38,7 @@ from tools.filesystem import (
 )
 from tools.registry import execute_tool, get_all_tool_schemas, get_registered_tools
 from tools.web_search import search_web
+from tools.developer_workflow import prepare_project
 
 
 @asynccontextmanager
@@ -196,6 +197,13 @@ class NotificationCreateRequest(BaseModel):
     message: str
     level: str = "info"
     desktop_alert: bool = True
+
+
+class DeveloperWorkflowRequest(BaseModel):
+    path: str = "."
+    run_tests: bool = True
+    install_dependencies: bool = False
+    start_server: bool = False
 
 
 # --- API Endpoints ---
@@ -362,6 +370,17 @@ def delete_project_file(req: DeleteFileRequest):
 def create_project_dir(req: MkdirRequest):
     """Create a new directory."""
     return create_directory(path=req.path)
+
+
+@app.post("/api/developer/prepare")
+def prepare_developer_project(req: DeveloperWorkflowRequest):
+    """Inspect and validate a project with explicitly gated side effects."""
+    return prepare_project(
+        path=req.path,
+        run_tests=req.run_tests,
+        install_dependencies=req.install_dependencies,
+        start_server=req.start_server,
+    )
 
 
 # --- AI Agents Endpoints ---
