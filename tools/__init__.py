@@ -22,6 +22,7 @@ from tools import computer_control
 from tools import developer_tools
 from tools import system_monitor
 from tools import vision_tools
+from tools import debugging
 
 __all__ = [
     "register_tool",
@@ -42,4 +43,5 @@ __all__ = [
     "developer_tools",
     "system_monitor",
     "vision_tools",
+    "debugging",
 ]

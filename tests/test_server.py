@@ -54,6 +54,13 @@ def test_memory_endpoints(client):
     assert del_resp.json()["success"] is True
 
 
+def test_conversation_search_rejects_empty_query(client):
+    """Conversation search should provide an explicit validation error."""
+    response = client.post("/api/memory/conversations/search", json={"query": ""})
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+
+
 def test_calendar_and_reminders_endpoints(client):
     """Test calendar and reminder API endpoints."""
     # Add event
@@ -112,6 +119,26 @@ def test_project_stats_and_tree_endpoints(client):
     assert tree_resp.json()["success"] is True
 
 
+def test_project_command_center_endpoints(client):
+    """Test project discovery and status summaries."""
+    projects = client.get("/api/projects")
+    assert projects.status_code == 200
+    assert projects.json()["success"] is True
+    assert any(project["path"] == "." for project in projects.json()["projects"])
+
+    status = client.get("/api/projects/status", params={"path": "."})
+    assert status.status_code == 200
+    assert status.json()["success"] is True
+    assert status.json()["project"]["git"]["available"] is True
+
+    registered = client.post(
+        "/api/projects",
+        json={"name": "JARVIS Workspace", "path": "."},
+    )
+    assert registered.status_code == 200
+    assert registered.json()["success"] is True
+
+
 def test_developer_prepare_endpoint(client):
     """Test the guarded developer workflow endpoint."""
     response = client.post(
@@ -124,6 +151,17 @@ def test_developer_prepare_endpoint(client):
     assert data["success"] is True
     assert data["project"] == "."
     assert data["failed_steps"] == []
+
+
+def test_developer_debug_endpoint(client):
+    """Test safe developer failure analysis."""
+    response = client.post(
+        "/api/developer/debug",
+        json={"output": "AssertionError: expected 2, got 3"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
 
 
 def test_system_stats_and_tools_endpoints(client):
@@ -256,4 +294,3 @@ def test_autonomous_and_notifications_endpoints(client):
     del_task = client.delete(f"/api/autonomous/tasks/{task_id}")
     assert del_task.status_code == 200
     assert del_task.json()["success"] is True
-

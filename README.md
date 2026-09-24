@@ -239,6 +239,7 @@ Jarvis includes a modern Cybernetic Web Dashboard:
 - **Agenda & Reminders Hub**: Interactive scheduler and alert center with real-time status chips.
 - **Codebase Analyzer**: Interactive project metrics, workspace tree, and live source previewer.
 - **Developer Mission**: Inspect a workspace, report Git status, optionally install dependencies, run tests, and plan server startup. Dependency installation is opt-in and server startup is reported as a plan rather than detached from the request.
+- **Project Command Center**: Discover or register projects and inspect manifests, tests, Git branch, and working-tree changes through `/api/projects` and `/api/projects/status`.
 - **Web Research Hub**: Live DuckDuckGo search query panel and article extractor.
 - **System Telemetry**: Live CPU, RAM, disk gauges, server uptime, and active tool monitor.
 
@@ -255,6 +256,16 @@ curl -X POST http://localhost:8000/api/developer/prepare \
 ```
 
 Set `install_dependencies` to `true` only after explicitly confirming that package installation is safe for the selected workspace. The workflow never launches a long-running server in the request; when `start_server` is enabled it returns a planned action for a later, supervised process lifecycle.
+
+Failure output can be analyzed without changing the workspace:
+
+```bash
+curl -X POST http://localhost:8000/api/developer/debug \
+  -H 'Content-Type: application/json' \
+  -d '{"output": "ModuleNotFoundError: No module named '\''fastapi'\''"}'
+```
+
+Conversation recall is available at `/api/memory/conversations/search`. Computer-control terminal commands are restricted to the workspace, dangerous patterns require `confirmed: true`, and command attempts are written to the audit log.
 
 ---
 
