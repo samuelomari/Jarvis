@@ -40,6 +40,15 @@ def _is_dangerous(command: str) -> Optional[str]:
     return None
 
 
+def _workspace_dir(cwd: str) -> Optional[Path]:
+    candidate = (PROJECT_ROOT / cwd).resolve() if not Path(cwd).is_absolute() else Path(cwd).resolve()
+    try:
+        candidate.relative_to(PROJECT_ROOT.resolve())
+    except ValueError:
+        return None
+    return candidate if candidate.is_dir() else None
+
+
 @register_tool({
     "name": "run_terminal_command",
     "description": "Execute a safe shell command in the project workspace and return stdout/stderr. Dangerous commands are blocked.",
@@ -49,23 +58,26 @@ def _is_dangerous(command: str) -> Optional[str]:
             "command": {"type": "string", "description": "Shell command to execute."},
             "cwd": {"type": "string", "description": "Working directory (defaults to project root)."},
             "timeout": {"type": "integer", "description": "Timeout in seconds (default: 30)."},
+            "confirmed": {"type": "boolean", "description": "Explicit confirmation for dangerous commands."},
         },
         "required": ["command"],
     },
 })
-def run_terminal_command(command: str, cwd: str = ".", timeout: int = 30) -> Dict[str, Any]:
+def run_terminal_command(command: str, cwd: str = ".", timeout: int = 30, confirmed: bool = False) -> Dict[str, Any]:
     """Execute a shell command safely."""
     danger = _is_dangerous(command)
-    if danger:
+    if danger and not confirmed:
         _audit_log(command, "BLOCKED", False)
         return {
             "success": False,
-            "error": f"Command blocked: contains dangerous pattern '{danger}'. Confirm manually if intentional.",
+            "needs_confirmation": True,
+            "error": f"Command blocked: contains dangerous pattern '{danger}'. Set confirmed=true only after manual review.",
         }
 
-    work_dir = PROJECT_ROOT / cwd if not Path(cwd).is_absolute() else Path(cwd)
-    if not work_dir.exists():
-        work_dir = PROJECT_ROOT
+    work_dir = _workspace_dir(cwd)
+    if work_dir is None:
+        _audit_log(command, "BLOCKED_INVALID_CWD", False)
+        return {"success": False, "error": "Working directory must be an existing path inside the project workspace."}
 
     try:
         proc = subprocess.run(

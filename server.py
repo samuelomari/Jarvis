@@ -24,6 +24,7 @@ from autonomous.scheduler import get_scheduler
 from config import MODEL, PROJECT_ROOT
 from memory.calendar_manager import CalendarManager
 from memory.manager import MemoryManager
+from memory.conversations import record as record_conversation, search as search_conversations
 from notifications.manager import get_notification_manager
 from tools.analysis import analyze_codebase
 from tools.filesystem import (
@@ -39,6 +40,8 @@ from tools.filesystem import (
 from tools.registry import execute_tool, get_all_tool_schemas, get_registered_tools
 from tools.web_search import search_web
 from tools.developer_workflow import prepare_project
+from tools.debugging import explain_failure
+from projects.manager import list_projects, register_project, summarize
 
 
 @asynccontextmanager
@@ -140,6 +143,16 @@ class SearchRequest(BaseModel):
     max_results: int = 5
 
 
+class ConversationSearchRequest(BaseModel):
+    query: str
+    limit: int = 20
+
+
+class DeveloperDebugRequest(BaseModel):
+    output: str
+    limit: int = 20
+
+
 class ReadFileRequest(BaseModel):
     path: str
     start_line: Optional[int] = None
@@ -206,6 +219,11 @@ class DeveloperWorkflowRequest(BaseModel):
     start_server: bool = False
 
 
+class ProjectRegisterRequest(BaseModel):
+    name: str
+    path: str
+
+
 # --- API Endpoints ---
 
 @app.get("/api/health")
@@ -233,6 +251,7 @@ def chat_endpoint(req: ChatRequest):
 
     try:
         reply = jarvis_agent.chat(req.message, on_tool_call=on_tool)
+        record_conversation(req.message, reply)
         return {
             "success": True,
             "reply": reply,
@@ -248,6 +267,12 @@ def clear_chat():
     """Clear agent conversation history."""
     jarvis_agent.clear_history()
     return {"success": True, "message": "Conversation history cleared."}
+
+
+@app.post("/api/memory/conversations/search")
+def search_conversation_history(req: ConversationSearchRequest):
+    """Search persisted user and assistant exchanges."""
+    return search_conversations(req.query, req.limit)
 
 
 # --- Memory Endpoints ---
@@ -330,6 +355,27 @@ def get_project_stats():
     return analyze_codebase(".")
 
 
+@app.get("/api/projects")
+def get_projects():
+    """List registered and discoverable workspace projects."""
+    return list_projects()
+
+
+@app.get("/api/projects/status")
+def get_project_status(path: str = "."):
+    """Return Git, manifest, and test readiness for one project."""
+    try:
+        return summarize(path)
+    except (OSError, ValueError) as exc:
+        return {"success": False, "error": f"Invalid project path: {exc}"}
+
+
+@app.post("/api/projects")
+def create_project_registration(req: ProjectRegisterRequest):
+    """Register a workspace-relative project for the command center."""
+    return register_project(req.name, req.path)
+
+
 @app.get("/api/project/tree")
 def get_project_tree(path: str = ".", max_depth: int = 3):
     """Get directory tree view."""
@@ -381,6 +427,12 @@ def prepare_developer_project(req: DeveloperWorkflowRequest):
         install_dependencies=req.install_dependencies,
         start_server=req.start_server,
     )
+
+
+@app.post("/api/developer/debug")
+def debug_developer_output(req: DeveloperDebugRequest):
+    """Explain test or terminal output without mutating the workspace."""
+    return explain_failure(req.output, req.limit)
 
 
 # --- AI Agents Endpoints ---

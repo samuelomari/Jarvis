@@ -1,4 +1,6 @@
 from tools.developer_workflow import prepare_project
+from tools.debugging import explain_failure
+from tools.computer_control import run_terminal_command
 
 
 def test_prepare_project_reports_project_and_skips_side_effects():
@@ -17,3 +19,21 @@ def test_prepare_project_rejects_paths_outside_workspace():
 
     assert result["success"] is False
     assert "Invalid project path" in result["error"]
+
+
+def test_explain_failure_extracts_actionable_findings():
+    result = explain_failure("ModuleNotFoundError: No module named 'fastapi'")
+
+    assert result["success"] is True
+    assert result["count"] == 1
+    assert "dependency" in result["findings"][0]["suggestion"]
+
+
+def test_terminal_control_requires_confirmation_and_workspace_cwd():
+    blocked = run_terminal_command("rm -rf ./tmp", confirmed=False)
+    assert blocked["success"] is False
+    assert blocked["needs_confirmation"] is True
+
+    outside = run_terminal_command("printf safe", cwd="..")
+    assert outside["success"] is False
+    assert "inside the project workspace" in outside["error"]
