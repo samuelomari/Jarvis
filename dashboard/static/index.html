@@ -65,6 +65,9 @@
       <button class="nav-tab" data-tab="code-view">
         <i data-lucide="code-2"></i> <span>Codebase Analyzer</span>
       </button>
+      <button class="nav-tab" data-tab="developer-view">
+        <i data-lucide="rocket"></i> <span>Developer Mission</span>
+      </button>
       <button class="nav-tab" data-tab="search-view">
         <i data-lucide="globe"></i> <span>Web Research</span>
       </button>
@@ -119,6 +122,26 @@
             </form>
             <span id="voice-status" class="voice-status" role="status" aria-live="polite"></span>
           </div>
+        </div>
+      </section>
+
+      <!-- TAB: DEVELOPER WORKFLOW -->
+      <section id="developer-view" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2><i data-lucide="rocket"></i> Prepare Developer Project</h2>
+            <p class="subtitle">Inspect, validate, and diagnose a workspace before making changes</p>
+          </div>
+        </div>
+        <div class="workflow-runner-card">
+          <form id="developer-workflow-form" class="workflow-form">
+            <input type="text" id="developer-project-path" value="." placeholder="Workspace-relative project path" required />
+            <label><input type="checkbox" id="developer-run-tests" checked /> Run tests</label>
+            <label><input type="checkbox" id="developer-install" /> Install dependencies</label>
+            <label><input type="checkbox" id="developer-start" /> Plan server start</label>
+            <button type="submit" class="btn-primary"><i data-lucide="play"></i> Run Mission</button>
+          </form>
+          <div id="developer-workflow-output" class="workflow-output" style="display:none;"></div>
         </div>
       </section>
 
@@ -507,4 +530,3 @@
   <script src="/static/app.js"></script>
 </body>
 </html>
-

@@ -1,12 +1,129 @@
 [
   {
+    "id": "notif_677ec977",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-09-24T19:51:38.592867",
+    "read": false
+  },
+  {
+    "id": "notif_b6603bc8",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-09-24T19:51:38.533997",
+    "read": true
+  },
+  {
+    "id": "notif_7059ec01",
+    "title": "System Check",
+    "message": "Tool test alert",
+    "level": "info",
+    "source": "jarvis_agent",
+    "timestamp": "2026-09-24T19:51:35.248983",
+    "read": true
+  },
+  {
+    "id": "notif_4798db91",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Audit dependencies and check permissions'\nAutonomous Mission Completed: 'Audit dependencies and check permissions'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-09-24T19:51:34.657202",
+    "read": true
+  },
+  {
+    "id": "notif_c5d02f87",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-09-24T19:48:14.157980",
+    "read": true
+  },
+  {
+    "id": "notif_d0c9fe70",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-09-24T19:48:14.124595",
+    "read": true
+  },
+  {
+    "id": "notif_05f965d1",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-09-24T19:45:25.550817",
+    "read": true
+  },
+  {
+    "id": "notif_a0749fd8",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-09-24T19:45:25.446654",
+    "read": true
+  },
+  {
+    "id": "notif_415b139b",
+    "title": "System Check",
+    "message": "Tool test alert",
+    "level": "info",
+    "source": "jarvis_agent",
+    "timestamp": "2026-09-24T19:45:23.473154",
+    "read": true
+  },
+  {
+    "id": "notif_b4e584b9",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Audit dependencies and check permissions'\nAutonomous Mission Completed: 'Audit dependencies and check permissions'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-09-24T19:45:21.899647",
+    "read": true
+  },
+  {
+    "id": "notif_d218c7db",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-09-24T19:42:37.724905",
+    "read": true
+  },
+  {
+    "id": "notif_6a2fcf0c",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-09-24T19:42:37.676655",
+    "read": true
+  },
+  {
+    "id": "notif_f1fe8282",
+    "title": "Reminder: Weekly Review",
+    "message": "Review code commits and test status",
+    "level": "alert",
+    "source": "calendar_reminder",
+    "timestamp": "2026-09-21T10:45:42.154459",
+    "read": true
+  },
+  {
     "id": "notif_e378285c",
     "title": "Autonomous Mission Accomplished",
     "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 2.53s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
     "level": "success",
     "source": "autonomous_engine",
     "timestamp": "2026-09-14T11:22:32.221254",
-    "read": false
+    "read": true
   },
   {
     "id": "notif_0af31e58",
