@@ -26,6 +26,7 @@ from memory.calendar_manager import CalendarManager
 from memory.manager import MemoryManager
 from memory.conversations import record as record_conversation, search as search_conversations
 from notifications.manager import get_notification_manager
+from security import PermissionLevel, get_emergency_stop, get_permission_manager
 from tools.analysis import analyze_codebase
 from tools.filesystem import (
     copy_file,
@@ -224,6 +225,22 @@ class ProjectRegisterRequest(BaseModel):
     path: str
 
 
+class EmergencyStopRequest(BaseModel):
+    reason: str = "Emergency stop requested via API."
+
+
+class ResumeRequest(BaseModel):
+    confirm: bool = False
+
+
+class SeriousModeRequest(BaseModel):
+    enabled: bool
+
+
+class PermissionCheckRequest(BaseModel):
+    tool_name: str = ""
+    tool_args: Optional[Dict[str, Any]] = None
+    command: str = ""
 # --- API Endpoints ---
 
 @app.get("/api/health")
@@ -581,6 +598,76 @@ def get_tools_list():
             {"name": name, "description": data["schema"].get("description", ""), "schema": data["schema"]}
             for name, data in tools.items()
         ],
+    }
+
+
+# --- Security & Permission Endpoints ---
+
+@app.get("/api/security/status")
+def get_security_status():
+    """Report the permission model and emergency stop state."""
+    pm = get_permission_manager()
+    return {
+        "success": True,
+        "auto_confirm_level": pm.auto_confirm_level,
+        "auto_confirm_label": PermissionLevel.NAMES.get(pm.auto_confirm_level, "UNKNOWN"),
+        "serious_mode": pm.serious_mode,
+        "emergency": get_emergency_stop().status(),
+    }
+
+
+@app.get("/api/security/audit")
+def get_security_audit(lines: int = 50):
+    """Return recent audit log entries."""
+    return get_permission_manager().read_audit_log(lines=lines)
+
+
+@app.post("/api/security/emergency-stop")
+def api_emergency_stop(req: EmergencyStopRequest):
+    """Engage the global emergency stop."""
+    return get_emergency_stop().engage(req.reason)
+
+
+@app.post("/api/security/resume")
+def api_resume(req: ResumeRequest):
+    """Release the emergency stop after explicit confirmation."""
+    if not req.confirm:
+        return {
+            "success": False,
+            "needs_confirmation": True,
+            "error": "Resuming operations requires explicit confirmation (confirm=true).",
+        }
+    return get_emergency_stop().release()
+
+
+@app.post("/api/security/serious-mode")
+def api_serious_mode(req: SeriousModeRequest):
+    """Enable or disable strict confirmation mode."""
+    return get_permission_manager().set_serious_mode(req.enabled)
+
+
+@app.post("/api/security/classify")
+def api_classify(req: PermissionCheckRequest):
+    """Preview the risk classification of a proposed tool or command."""
+    pm = get_permission_manager()
+    if req.command:
+        level, reason = pm.classify_command(req.command)
+        target = req.command
+        kind = "command"
+    elif req.tool_name:
+        level, reason = pm.classify_tool(req.tool_name, req.tool_args or {})
+        target = req.tool_name
+        kind = "tool"
+    else:
+        return {"success": False, "error": "Provide 'command' or 'tool_name'."}
+    return {
+        "success": True,
+        "kind": kind,
+        "target": target,
+        "permission_level": level,
+        "risk_level": PermissionLevel.NAMES.get(level, "UNKNOWN"),
+        "requires_confirmation": level > pm.auto_confirm_level,
+        "reason": reason,
     }
 
 

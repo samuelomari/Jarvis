@@ -23,6 +23,11 @@ from tools import developer_tools
 from tools import system_monitor
 from tools import vision_tools
 from tools import debugging
+from tools import clipboard
+from tools import window_manager
+from tools import file_manager
+from tools import security_manager
+from tools import serious_mode
 
 __all__ = [
     "register_tool",
@@ -44,4 +49,9 @@ __all__ = [
     "system_monitor",
     "vision_tools",
     "debugging",
+    "clipboard",
+    "window_manager",
+    "file_manager",
+    "security_manager",
+    "serious_mode",
 ]

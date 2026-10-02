@@ -26,6 +26,7 @@ from config import (
     USE_LOCAL_MODEL,
 )
 from memory.manager import MemoryManager
+from security import get_emergency_stop, is_emergency_command
 from tools.registry import execute_tool, get_all_tool_schemas
 
 
@@ -80,16 +81,45 @@ class Jarvis:
                 trimmed = trimmed[1:]
             self.messages = trimmed
 
-    def run_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> Any:
-        """Execute a tool via the tool registry."""
-        return execute_tool(tool_name, tool_input)
+    def run_tool(
+        self,
+        tool_name: str,
+        tool_input: Dict[str, Any],
+        confirm_callback: Optional[Callable[[Any], bool]] = None,
+        request: str = "",
+    ) -> Any:
+        """Execute a tool via the permission-gated registry."""
+        return execute_tool(
+            tool_name,
+            tool_input,
+            confirm_callback=confirm_callback,
+            request=request,
+        )
 
     def chat(
         self,
         user_input: str,
         on_tool_call: Optional[Callable[[str, Dict[str, Any], Any], None]] = None,
+        confirm_callback: Optional[Callable[[Any], bool]] = None,
     ) -> str:
         """Process user input and return Jarvis's response with tool execution loop."""
+        # Emergency control is handled before reaching the model.
+        if is_emergency_command(user_input):
+            result = get_emergency_stop().engage()
+            self.messages.append({"role": "user", "content": user_input})
+            self.messages.append({"role": "assistant", "content": result["message"]})
+            return (
+                "**[EMERGENCY STOP ENGAGED]**\n\n"
+                f"{result['message']}\n"
+                "All tool execution is now blocked. Say 'release emergency stop' to resume."
+            )
+
+        if "release emergency stop" in user_input.strip().lower() or "resume jarvis" in user_input.strip().lower():
+            result = get_emergency_stop().release()
+            self.messages.append({"role": "user", "content": user_input})
+            self.messages.append({"role": "assistant", "content": result["message"]})
+            return f"**[CONTROL RESTORED]** {result['message']}"
+
         self.messages.append({
             "role": "user",
             "content": user_input,
@@ -152,8 +182,13 @@ class Jarvis:
                 tool_name = block.name
                 tool_args = block.input or {}
 
-                # Execute tool
-                result = self.run_tool(tool_name, tool_args)
+                # Execute tool (permission-gated)
+                result = self.run_tool(
+                    tool_name,
+                    tool_args,
+                    confirm_callback=confirm_callback,
+                    request=user_input,
+                )
 
                 if on_tool_call:
                     try:
