@@ -241,8 +241,6 @@ class PermissionCheckRequest(BaseModel):
     tool_name: str = ""
     tool_args: Optional[Dict[str, Any]] = None
     command: str = ""
-
-
 # --- API Endpoints ---
 
 @app.get("/api/health")
