@@ -110,7 +110,9 @@ def test_jarvis_history_trimming(tmp_path):
 
 def test_jarvis_chat_tool_execution(tmp_path):
     """Test mock chat loop triggering tool call and returning response."""
-    with patch("anthropic.Anthropic") as mock_anthropic:
+    with patch("anthropic.Anthropic") as mock_anthropic, \
+         patch("agent.core.JARVIS_DEV_MODE", False), \
+         patch("agent.core.ANTHROPIC_API_KEY", "test-api-key"):
         mock_client = MagicMock()
         mock_anthropic.return_value = mock_client
 

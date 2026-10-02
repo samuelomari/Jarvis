@@ -1,25 +1,40 @@
-"""Voice module - wake word detection, speech-to-text (STT), and text-to-speech (TTS)."""
+"""Voice module - wake word detection, speech-to-text (STT), text-to-speech (TTS), and emergency stop."""
 
+import logging
 import queue
+import re
 import shutil
 import subprocess
 import threading
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Dict, Optional
+
+from tools.registry import register_tool
+from security.emergency import get_emergency_controller
+
+logger = logging.getLogger(__name__)
 
 
 # ── TTS Engine ─────────────────────────────────────────────────────────────────
 
 class TTSEngine:
-    """Text-to-speech engine with multiple backend support."""
+    """Text-to-speech engine with multiple backend support and emergency interrupt."""
 
     def __init__(self):
         self._pyttsx3_engine = None
         self._lock = threading.Lock()
+        self._current_proc: Optional[subprocess.Popen] = None
         self._backend = self._detect_backend()
 
     def _detect_backend(self) -> str:
         """Detect the best available TTS backend."""
+        # Check pyttsx3 first if available
+        try:
+            import pyttsx3
+            return "pyttsx3"
+        except ImportError:
+            pass
+
         if shutil.which("espeak-ng"):
             return "espeak-ng"
         if shutil.which("espeak"):
@@ -28,53 +43,40 @@ class TTSEngine:
             return "spd-say"
         if shutil.which("say"):
             return "say"  # macOS
-        try:
-            import pyttsx3
-            return "pyttsx3"
-        except ImportError:
-            pass
+
         return "none"
+
+    def stop(self) -> None:
+        """Immediately stop speaking (emergency interrupt)."""
+        with self._lock:
+            if self._current_proc:
+                try:
+                    self._current_proc.terminate()
+                except Exception:
+                    pass
+                self._current_proc = None
+            if self._pyttsx3_engine:
+                try:
+                    self._pyttsx3_engine.stop()
+                except Exception:
+                    pass
 
     def speak(self, text: str, rate: int = 175, voice: Optional[str] = None) -> bool:
         """Speak text using the best available backend. Returns True on success."""
         if not text or not text.strip():
             return False
 
-        clean_text = text.strip()
+        # If emergency stop is active, do not speak
+        emergency = get_emergency_controller()
+        if emergency.is_stopped:
+            return False
+
+        clean_text = _strip_markdown(text.strip())
+        if not clean_text:
+            return False
 
         with self._lock:
-            if self._backend == "espeak-ng":
-                cmd = ["espeak-ng", "-s", str(rate), clean_text]
-                if voice:
-                    cmd = ["espeak-ng", "-v", voice, "-s", str(rate), clean_text]
-                try:
-                    subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
-                    return True
-                except Exception:
-                    pass
-
-            if self._backend in ("espeak", "espeak-ng"):
-                cmd = ["espeak", "-s", str(rate), clean_text]
-                try:
-                    subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
-                    return True
-                except Exception:
-                    pass
-
-            if self._backend == "spd-say":
-                try:
-                    subprocess.run(["spd-say", clean_text], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
-                    return True
-                except Exception:
-                    pass
-
-            if self._backend == "say":
-                try:
-                    subprocess.run(["say", clean_text], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
-                    return True
-                except Exception:
-                    pass
-
+            # 1. Try pyttsx3
             if self._backend == "pyttsx3":
                 try:
                     import pyttsx3
@@ -84,6 +86,42 @@ class TTSEngine:
                     self._pyttsx3_engine.say(clean_text)
                     self._pyttsx3_engine.runAndWait()
                     return True
+                except Exception as exc:
+                    logger.debug("pyttsx3 speech failed, attempting subprocess fallback: %s", exc)
+
+            # 2. Try espeak-ng / espeak
+            for bin_name in ["espeak-ng", "espeak"]:
+                if shutil.which(bin_name):
+                    cmd = [bin_name, "-s", str(rate), clean_text]
+                    if voice:
+                        cmd = [bin_name, "-v", voice, "-s", str(rate), clean_text]
+                    try:
+                        self._current_proc = subprocess.Popen(
+                            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                        )
+                        emergency.register_process(self._current_proc)
+                        self._current_proc.wait(timeout=30)
+                        emergency.unregister_process(self._current_proc.pid)
+                        self._current_proc = None
+                        return True
+                    except Exception:
+                        self._current_proc = None
+
+            # 3. Try spd-say
+            if shutil.which("spd-say"):
+                try:
+                    res = subprocess.run(["spd-say", clean_text], capture_output=True, timeout=15)
+                    if res.returncode == 0:
+                        return True
+                except Exception:
+                    pass
+
+            # 4. macOS say
+            if shutil.which("say"):
+                try:
+                    res = subprocess.run(["say", clean_text], capture_output=True, timeout=15)
+                    if res.returncode == 0:
+                        return True
                 except Exception:
                     pass
 
@@ -97,7 +135,7 @@ class TTSEngine:
 
     @property
     def available(self) -> bool:
-        return self._backend != "none"
+        return self._backend != "none" or shutil.which("espeak") is not None
 
     @property
     def backend_name(self) -> str:
@@ -107,7 +145,7 @@ class TTSEngine:
 # ── STT Engine ─────────────────────────────────────────────────────────────────
 
 class STTEngine:
-    """Speech-to-text engine using SpeechRecognition library."""
+    """Speech-to-text engine using SpeechRecognition with graceful fallbacks."""
 
     def __init__(self):
         self._available = False
@@ -129,7 +167,7 @@ class STTEngine:
 
     def listen_once(self, timeout: int = 5, phrase_limit: int = 15) -> Optional[str]:
         """Listen for a single utterance and return transcribed text."""
-        if not self._available:
+        if not self._available or not self._sr:
             return None
 
         try:
@@ -137,23 +175,22 @@ class STTEngine:
                 self._recognizer.adjust_for_ambient_noise(source, duration=0.3)
                 audio = self._recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_limit)
 
-            # Try Google STT first (free, online)
+            # Try Google STT first
             try:
                 text = self._recognizer.recognize_google(audio)
                 return text.strip()
             except Exception:
                 pass
 
-            # Fallback: Sphinx (offline, less accurate)
+            # Fallback: Sphinx
             try:
                 text = self._recognizer.recognize_sphinx(audio)
                 return text.strip()
             except Exception:
                 pass
 
-        except self._sr.WaitTimeoutError:
-            return None
-        except Exception:
+        except Exception as exc:
+            logger.debug("Microphone / STT error: %s", exc)
             return None
 
         return None
@@ -177,7 +214,7 @@ class STTEngine:
 # ── Wake Word Detector ─────────────────────────────────────────────────────────
 
 class WakeWordDetector:
-    """Simple wake word detector using keyword matching on STT output."""
+    """Wake word detector matching on phrases like 'Jarvis' and 'Hey Jarvis'."""
 
     DEFAULT_WAKE_WORDS = ["hey jarvis", "jarvis", "ok jarvis", "hello jarvis"]
 
@@ -200,10 +237,7 @@ class WakeWordDetector:
         return text
 
     def listen_for_wake_word(self, timeout_per_attempt: int = 4) -> Optional[str]:
-        """
-        Block until a wake word is detected.
-        Returns the command text after the wake word, or None if STT unavailable.
-        """
+        """Block until a wake word is detected."""
         if not self.stt.available:
             return None
 
@@ -247,11 +281,12 @@ class VoiceSession:
         self.tts = tts or TTSEngine()
         self.stt = stt or STTEngine()
         self.wake_detector = wake_word_detector or WakeWordDetector(stt=self.stt)
+        self._active = False
 
     def greet(self) -> None:
         """Speak a startup greeting."""
         if self.tts.available:
-            self.tts.speak("Jarvis voice interface online. Say 'Hey Jarvis' to begin.")
+            self.tts.speak("Jarvis voice interface online. I am ready for your commands.")
 
     def speak_response(self, text: str) -> None:
         """Speak Jarvis's response, stripping markdown."""
@@ -276,7 +311,6 @@ class VoiceSession:
 
 def _strip_markdown(text: str) -> str:
     """Remove common markdown syntax for cleaner TTS output."""
-    import re
     text = re.sub(r"#{1,6}\s*", "", text)
     text = re.sub(r"\*{1,3}([^*]+)\*{1,3}", r"\1", text)
     text = re.sub(r"`{1,3}[^`]*`{1,3}", "", text)
@@ -285,6 +319,64 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r"\n{2,}", ". ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+# ── Registered Tools ───────────────────────────────────────────────────────────
+
+@register_tool({
+    "name": "voice_speak",
+    "description": "Speak a message aloud using Jarvis's text-to-speech audio system.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "text": {"type": "string", "description": "Text to speak aloud to the user."},
+            "rate": {"type": "integer", "description": "Speech speed rate (default: 175)."},
+        },
+        "required": ["text"],
+    },
+})
+def voice_speak(text: str, rate: int = 175) -> Dict[str, Any]:
+    """Speak text using TTS engine."""
+    tts = get_tts()
+    success = tts.speak(text, rate=rate)
+    return {
+        "success": success,
+        "backend": tts.backend_name,
+        "text": text,
+        "message": "Message spoken aloud." if success else "Speech engine unavailable or muted.",
+    }
+
+
+@register_tool({
+    "name": "voice_listen",
+    "description": "Listen for audio input through the microphone and transcribe it into text.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "timeout": {"type": "integer", "description": "Microphone listen timeout in seconds (default: 5)."},
+        },
+        "required": [],
+    },
+})
+def voice_listen(timeout: int = 5) -> Dict[str, Any]:
+    """Listen for user voice command via microphone."""
+    stt = get_stt()
+    if not stt.available:
+        return {
+            "success": False,
+            "error": "SpeechRecognition library or microphone is unavailable. You can enter typed voice commands.",
+        }
+
+    transcription = stt.listen_once(timeout=timeout)
+    if transcription:
+        return {
+            "success": True,
+            "transcription": transcription,
+        }
+    return {
+        "success": False,
+        "error": "No speech detected within timeout period.",
+    }
 
 
 # ── Singletons ─────────────────────────────────────────────────────────────────
