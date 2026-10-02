@@ -1,132 +1,130 @@
-"""Emergency Stop Controller for JARVIS.
+"""Global emergency control for Jarvis.
 
-Provides a global, immediate stop mechanism when the user signals:
-- "Jarvis stop"
-- "Jarvis cancel"
-- "Emergency stop"
+Provides a single, thread-safe kill switch. When engaged it:
+
+* blocks every subsequent tool execution (enforced by the Permission Manager),
+* invokes registered cancel callbacks so running automations can stop,
+* clears queued actions,
+* reports control back to the user.
+
+Recognised triggers: ``jarvis stop``, ``jarvis cancel``, ``emergency stop``.
 """
 
-import logging
-import subprocess
+from __future__ import annotations
+
 import threading
-from typing import Any, Callable, Dict, List, Optional
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Callable, Dict, List
 
-logger = logging.getLogger(__name__)
-
-EMERGENCY_PHRASES = [
+EMERGENCY_TRIGGERS = (
     "jarvis stop",
     "jarvis cancel",
     "emergency stop",
-    "stop jarvis",
-    "cancel jarvis",
-    "jarvis halt",
-    "stop immediately",
-]
+    "jarvis emergency stop",
+    "jarvis emergency halt",
+)
 
 
-class EmergencyStopController:
-    """Singleton emergency stop controller for JARVIS."""
+@dataclass
+class EmergencyStop:
+    """Thread-safe emergency brake for the whole assistant."""
 
-    _instance: Optional["EmergencyStopController"] = None
-    _lock = threading.Lock()
+    _engaged: bool = False
+    _lock: threading.RLock = field(default_factory=threading.RLock)
+    engaged_at: str = ""
+    reason: str = ""
+    _cancel_hooks: List[Callable[[], None]] = field(default_factory=list)
+    _queue: List[Dict[str, Any]] = field(default_factory=list)
 
-    def __new__(cls) -> "EmergencyStopController":
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = super().__new__(cls)
-                cls._instance._initialized = False
-            return cls._instance
-
-    def __init__(self) -> None:
-        if getattr(self, "_initialized", False):
-            return
-        self._stopped_event = threading.Event()
-        self._active_processes: Dict[int, subprocess.Popen] = {}
-        self._callbacks: List[Callable[[], None]] = []
-        self._process_lock = threading.Lock()
-        self._initialized = True
+    # -- State -----------------------------------------------------------------
 
     @property
-    def is_stopped(self) -> bool:
-        """Check if an emergency stop is active."""
-        return self._stopped_event.is_set()
+    def is_engaged(self) -> bool:
+        with self._lock:
+            return self._engaged
 
-    def check_phrase(self, text: str) -> bool:
-        """Check if text contains an emergency stop command."""
-        if not text:
-            return False
-        clean = text.strip().lower()
-        for phrase in EMERGENCY_PHRASES:
-            if phrase in clean:
-                return True
-        return False
+    def status(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "engaged": self._engaged,
+                "engaged_at": self.engaged_at,
+                "reason": self.reason,
+                "cancelled_hooks": len(self._cancel_hooks),
+                "queued_actions": len(self._queue),
+            }
 
-    def register_process(self, proc: subprocess.Popen) -> None:
-        """Register a subprocess to be killed on emergency stop."""
-        with self._process_lock:
-            if proc.pid:
-                self._active_processes[proc.pid] = proc
+    # -- Control ---------------------------------------------------------------
 
-    def unregister_process(self, pid: int) -> None:
-        """Unregister a completed subprocess."""
-        with self._process_lock:
-            self._active_processes.pop(pid, None)
+    def engage(self, reason: str = "User requested emergency stop.") -> Dict[str, Any]:
+        """Engage the brake, run cancel hooks, and drop queued actions."""
+        with self._lock:
+            self._engaged = True
+            self.engaged_at = datetime.now().isoformat()
+            self.reason = reason
+            hooks = list(self._cancel_hooks)
+            queued = len(self._queue)
+            self._queue.clear()
 
-    def register_callback(self, callback: Callable[[], None]) -> None:
-        """Register a cleanup/cancellation callback."""
-        with self._process_lock:
-            if callback not in self._callbacks:
-                self._callbacks.append(callback)
-
-    def trigger(self, reason: str = "User initiated emergency stop") -> Dict[str, Any]:
-        """
-        Immediately:
-        1. Stop running commands
-        2. Stop pending automations
-        3. Cancel queued actions
-        4. Kill running registered processes
-        5. Return control to the user
-        """
-        self._stopped_event.set()
-        killed_pids = []
-
-        with self._process_lock:
-            for pid, proc in list(self._active_processes.items()):
-                try:
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=1.0)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                    killed_pids.append(pid)
-                except Exception as exc:
-                    logger.warning("Error terminating process %s: %s", pid, exc)
-            self._active_processes.clear()
-
-            for cb in self._callbacks:
-                try:
-                    cb()
-                except Exception as exc:
-                    logger.warning("Error in emergency callback: %s", exc)
+        cancelled = 0
+        for hook in hooks:
+            try:
+                hook()
+                cancelled += 1
+            except Exception:
+                continue
 
         return {
-            "status": "STOPPED",
-            "reason": reason,
-            "killed_processes": killed_pids,
-            "message": "Global emergency stop activated. All active operations halted.",
+            "success": True,
+            "engaged": True,
+            "message": "Emergency stop engaged. All commands and queued actions cancelled.",
+            "cancel_hooks_invoked": cancelled,
+            "queued_actions_discarded": queued,
         }
 
-    def reset(self) -> None:
-        """Reset the emergency stop state to resume normal operations."""
-        self._stopped_event.clear()
+    def release(self) -> Dict[str, Any]:
+        """Return control to the user and allow tools to run again."""
+        with self._lock:
+            self._engaged = False
+            self.reason = ""
+            self.engaged_at = ""
+        return {"success": True, "engaged": False, "message": "Emergency stop released. Normal operation resumed."}
+
+    # -- Integration points ----------------------------------------------------
+
+    def register_cancel_hook(self, hook: Callable[[], None]) -> None:
+        """Register a callback invoked when the emergency brake is pulled."""
+        with self._lock:
+            if hook not in self._cancel_hooks:
+                self._cancel_hooks.append(hook)
+
+    def enqueue(self, action: Dict[str, Any]) -> bool:
+        """Queue a pending action unless the brake is engaged."""
+        with self._lock:
+            if self._engaged:
+                return False
+            self._queue.append(action)
+            return True
+
+    def drain_queue(self) -> List[Dict[str, Any]]:
+        """Return and clear the queued actions."""
+        with self._lock:
+            pending = list(self._queue)
+            self._queue.clear()
+            return pending
 
 
-_controller: Optional[EmergencyStopController] = None
+def is_emergency_command(text: str) -> bool:
+    """Return True when user input is an emergency stop phrase."""
+    if not text:
+        return False
+    normalized = " ".join(text.strip().lower().rstrip(".!").split())
+    return normalized in EMERGENCY_TRIGGERS
 
 
-def get_emergency_controller() -> EmergencyStopController:
-    """Get the global EmergencyStopController instance."""
-    global _controller
-    if _controller is None:
-        _controller = EmergencyStopController()
-    return _controller
+_EMERGENCY_STOP: EmergencyStop = EmergencyStop()
+
+
+def get_emergency_stop() -> EmergencyStop:
+    """Return the process-wide emergency stop singleton."""
+    return _EMERGENCY_STOP

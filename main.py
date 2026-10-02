@@ -26,7 +26,8 @@ except ImportError:
 
 from agent.core import Jarvis
 from config import MODEL
-from tools.registry import get_registered_tools
+from security import get_emergency_stop, get_permission_manager
+from tools.registry import execute_tool, get_registered_tools
 
 
 def print_banner():
@@ -58,6 +59,12 @@ def print_help():
         table.add_row("/notifications", "View notifications and alerts")
         table.add_row("/memory", "Inspect all long-term memories")
         table.add_row("/tools", "List all registered tools and descriptions")
+        table.add_row("/status", "System + security status report")
+        table.add_row("/security", "Show permission model and emergency state")
+        table.add_row("/audit", "Show the recent action audit log")
+        table.add_row("/stop", "EMERGENCY STOP - halt all commands and automations")
+        table.add_row("/resume", "Release the emergency stop")
+        table.add_row("/serious", "Toggle serious mode (confirm every change)")
         table.add_row("/dashboard", "Launch or display the Cyber Web Dashboard")
         table.add_row("/clear", "Reset conversation history")
         table.add_row("/exit, exit", "Exit the assistant session")
@@ -70,6 +77,12 @@ def print_help():
         print("  /notifications - View alerts and notifications")
         print("  /memory        - View long-term memory")
         print("  /tools         - List registered tools")
+        print("  /status        - System + security status")
+        print("  /security      - Permission model & emergency state")
+        print("  /audit         - Recent action audit log")
+        print("  /stop          - EMERGENCY STOP")
+        print("  /resume        - Release emergency stop")
+        print("  /serious       - Toggle serious mode")
         print("  /clear         - Clear conversation history")
         print("  /exit          - Quit\n")
 
@@ -185,6 +198,59 @@ def print_notifications():
         print()
 
 
+def print_security():
+    """Display the active permission model and emergency state."""
+    pm = get_permission_manager()
+    emergency = get_emergency_stop()
+    status = {
+        "Auto-confirm level": f"LEVEL {pm.auto_confirm_level} ({['INFORMATION', 'SAFE_AUTOMATION', 'SYSTEM_CHANGE', 'DESTRUCTIVE'][pm.auto_confirm_level]})",
+        "Serious mode": "ON" if pm.serious_mode else "OFF",
+        "Emergency stop": "ENGAGED" if emergency.is_engaged else "released",
+    }
+    if HAS_RICH:
+        table = Table(title="Security & Permission Posture", border_style="bold red")
+        table.add_column("Setting", style="bold cyan")
+        table.add_column("Value", style="white")
+        for key, value in status.items():
+            table.add_row(key, str(value))
+        console.print(table)
+        console.print("[dim]LEVEL 0/1 run automatically. LEVEL 2/3 require explicit confirmation.[/dim]")
+    else:
+        print("\nSecurity & Permission Posture:")
+        for key, value in status.items():
+            print(f"  {key}: {value}")
+        print()
+
+
+def print_audit(lines: int = 20):
+    """Display the recent action audit log."""
+    entries = get_permission_manager().read_audit_log(lines=lines)
+    log = entries.get("log", [])
+    if HAS_RICH:
+        table = Table(title=f"Action Audit Log ({len(log)} shown)", border_style="dim green")
+        table.add_column("Entry", style="white")
+        for line in log:
+            table.add_row(line)
+        console.print(table if log else "[dim]No audit entries yet.[/dim]")
+    else:
+        print("\nAction Audit Log:")
+        for line in log:
+            print(f"  {line}")
+        print()
+
+
+def prompt_confirmation(decision) -> bool:
+    """Interactive yes/no prompt shown before sensitive actions."""
+    preview = decision.render_preview()
+    if HAS_RICH:
+        console.print(f"[warning]{preview}[/warning]")
+        answer = console.input("[bold]Proceed? yes/no > [/bold]").strip().lower()
+    else:
+        print(preview)
+        answer = input("Proceed? yes/no > ").strip().lower()
+    return answer in ("yes", "y")
+
+
 def on_tool_executed(name: str, args: dict, result: dict):
     """Callback hook to print tool execution activity in the terminal."""
     args_summary = ", ".join(f"{k}={repr(v)[:40]}" for k, v in args.items())
@@ -242,6 +308,49 @@ def main():
                 print_memory(jarvis)
                 continue
 
+            if cmd == "/security":
+                print_security()
+                continue
+
+            if cmd == "/audit":
+                print_audit()
+                continue
+
+            if cmd in ("/status", "/system"):
+                result = execute_tool("system_status")
+                verdict = result.get("security", {}) if isinstance(result, dict) else {}
+                if HAS_RICH:
+                    console.print(f"[bold cyan]System status:[/bold cyan] emergency={'ENGAGED' if verdict.get('emergency', {}).get('engaged') else 'released'} | serious_mode={verdict.get('serious_mode')}")
+                    console.print(result)
+                else:
+                    print(result)
+                continue
+
+            if cmd in ("/stop", "/emergency", "/cancel"):
+                result = get_emergency_stop().engage("CLI /stop command")
+                if HAS_RICH:
+                    console.print(f"[danger]EMERGENCY STOP:[/danger] {result['message']}")
+                else:
+                    print(f"EMERGENCY STOP: {result['message']}")
+                continue
+
+            if cmd in ("/resume", "/release"):
+                result = get_emergency_stop().release()
+                if HAS_RICH:
+                    console.print(f"[green]CONTROL RESTORED:[/green] {result['message']}")
+                else:
+                    print(f"CONTROL RESTORED: {result['message']}")
+                continue
+
+            if cmd == "/serious":
+                pm = get_permission_manager()
+                result = pm.set_serious_mode(not pm.serious_mode)
+                if HAS_RICH:
+                    console.print(f"[warning]{result['message']}[/warning]")
+                else:
+                    print(result["message"])
+                continue
+
             if cmd == "/dashboard":
                 if HAS_RICH:
                     console.print("[bold cyan] Jarvis Web Dashboard is available at:[/bold cyan] [underline]http://localhost:8000[/underline]")
@@ -261,13 +370,21 @@ def main():
             # Chat with agent
             if HAS_RICH:
                 with console.status("[dim cyan]Jarvis is thinking...[/dim cyan]", spinner="dots"):
-                    response = jarvis.chat(user_input, on_tool_call=on_tool_executed)
+                    response = jarvis.chat(
+                        user_input,
+                        on_tool_call=on_tool_executed,
+                        confirm_callback=prompt_confirmation,
+                    )
 
                 console.print("\n[jarvis]Jarvis >[/jarvis]")
                 console.print(Markdown(response))
             else:
                 print("\nJarvis is thinking...")
-                response = jarvis.chat(user_input, on_tool_call=on_tool_executed)
+                response = jarvis.chat(
+                    user_input,
+                    on_tool_call=on_tool_executed,
+                    confirm_callback=prompt_confirmation,
+                )
                 print(f"\nJarvis:\n{response}")
 
         except (KeyboardInterrupt, EOFError):

@@ -25,10 +25,9 @@ from tools import vision_tools
 from tools import debugging
 from tools import clipboard
 from tools import window_manager
-from tools import email_tools
 from tools import file_manager
+from tools import security_manager
 from tools import serious_mode
-import agent.voice
 
 __all__ = [
     "register_tool",
@@ -52,7 +51,7 @@ __all__ = [
     "debugging",
     "clipboard",
     "window_manager",
-    "email_tools",
     "file_manager",
+    "security_manager",
     "serious_mode",
 ]

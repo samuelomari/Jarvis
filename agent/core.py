@@ -26,13 +26,12 @@ from config import (
     USE_LOCAL_MODEL,
 )
 from memory.manager import MemoryManager
+from security import get_emergency_stop, is_emergency_command
 from tools.registry import execute_tool, get_all_tool_schemas
-from security.emergency import get_emergency_controller
-from security.permission_manager import PermissionLevel, get_permission_manager
 
 
 class Jarvis:
-    """Main Jarvis AI agent with tool execution, permission gating, emergency stop, and voice support."""
+    """Main Jarvis AI agent with tool execution and memory."""
 
     def __init__(
         self,
@@ -45,9 +44,6 @@ class Jarvis:
         self.memory_manager = memory_manager or MemoryManager(
             self.workspace_root / "memory" / "memory.json"
         )
-        self.permission_manager = get_permission_manager()
-        self.emergency_controller = get_emergency_controller()
-        self.voice_mode = False
 
         if (JARVIS_DEV_MODE or not ANTHROPIC_API_KEY or anthropic is None) and USE_LOCAL_MODEL:
             try:
@@ -85,67 +81,44 @@ class Jarvis:
                 trimmed = trimmed[1:]
             self.messages = trimmed
 
-    def run_tool(self, tool_name: str, tool_input: Dict[str, Any], user_request: str = "") -> Any:
-        """Execute a tool via the tool registry through the Permission Manager."""
-        if self.emergency_controller.is_stopped:
-            return {"success": False, "error": "Emergency stop is active. Tool execution suspended."}
-
-        level, reason = self.permission_manager.classify_tool(tool_name, tool_input)
-
-        # Gate sensitive Level 2 / Level 3 operations that require explicit confirmation
-        if level in (PermissionLevel.LEVEL_2_SYSTEM_CHANGES, PermissionLevel.LEVEL_3_DESTRUCTIVE_OR_SENSITIVE):
-            if tool_name in ("delete_file", "send_email", "restart_computer", "shutdown_computer", "git_push"):
-                if not tool_input.get("confirmed", False):
-                    preview = self.permission_manager.build_command_preview(
-                        task=f"Execute {tool_name}",
-                        tool_name=tool_name,
-                        tool_args=tool_input,
-                        level=level,
-                    )
-                    return {
-                        "success": False,
-                        "needs_confirmation": True,
-                        "risk_level": level.name,
-                        "preview": preview,
-                        "error": f"Action requires explicit user confirmation. Please confirm with confirmed=True:\n{preview}",
-                    }
-
-        result = execute_tool(tool_name, tool_input)
-
-        # Log action in structured audit trail
-        status = "COMPLETED" if not (isinstance(result, dict) and result.get("success") is False) else "FAILED"
-        self.permission_manager.log_action(
-            request_text=user_request or tool_name,
-            actions_performed=f"Tool: {tool_name}",
-            commands_executed=json.dumps(tool_input),
-            result=result,
-            level=level,
-            status=status,
+    def run_tool(
+        self,
+        tool_name: str,
+        tool_input: Dict[str, Any],
+        confirm_callback: Optional[Callable[[Any], bool]] = None,
+        request: str = "",
+    ) -> Any:
+        """Execute a tool via the permission-gated registry."""
+        return execute_tool(
+            tool_name,
+            tool_input,
+            confirm_callback=confirm_callback,
+            request=request,
         )
-
-        return result
 
     def chat(
         self,
         user_input: str,
         on_tool_call: Optional[Callable[[str, Dict[str, Any], Any], None]] = None,
+        confirm_callback: Optional[Callable[[Any], bool]] = None,
     ) -> str:
         """Process user input and return Jarvis's response with tool execution loop."""
-        # 1. Emergency stop check
-        if self.emergency_controller.check_phrase(user_input):
-            self.emergency_controller.trigger(reason=f"Emergency phrase in input: '{user_input}'")
-            stop_msg = "Emergency stop activated. All running commands, automations, and audio outputs have been immediately stopped."
-            if self.voice_mode:
-                try:
-                    from agent.voice import get_tts
-                    get_tts().speak(stop_msg)
-                except Exception:
-                    pass
-            return stop_msg
+        # Emergency control is handled before reaching the model.
+        if is_emergency_command(user_input):
+            result = get_emergency_stop().engage()
+            self.messages.append({"role": "user", "content": user_input})
+            self.messages.append({"role": "assistant", "content": result["message"]})
+            return (
+                "**[EMERGENCY STOP ENGAGED]**\n\n"
+                f"{result['message']}\n"
+                "All tool execution is now blocked. Say 'release emergency stop' to resume."
+            )
 
-        # Reset emergency state for a new command if previously set
-        if self.emergency_controller.is_stopped:
-            self.emergency_controller.reset()
+        if "release emergency stop" in user_input.strip().lower() or "resume jarvis" in user_input.strip().lower():
+            result = get_emergency_stop().release()
+            self.messages.append({"role": "user", "content": user_input})
+            self.messages.append({"role": "assistant", "content": result["message"]})
+            return f"**[CONTROL RESTORED]** {result['message']}"
 
         self.messages.append({
             "role": "user",
@@ -209,8 +182,13 @@ class Jarvis:
                 tool_name = block.name
                 tool_args = block.input or {}
 
-                # Execute tool via Permission Manager
-                result = self.run_tool(tool_name, tool_args, user_request=user_input)
+                # Execute tool (permission-gated)
+                result = self.run_tool(
+                    tool_name,
+                    tool_args,
+                    confirm_callback=confirm_callback,
+                    request=user_input,
+                )
 
                 if on_tool_call:
                     try:
@@ -245,17 +223,7 @@ class Jarvis:
                 "content": tool_results,
             })
 
-        final_text = self.extract_text(response)
-
-        # Output via audio if voice mode is enabled
-        if self.voice_mode and final_text:
-            try:
-                from agent.voice import get_tts
-                get_tts().speak_async(final_text)
-            except Exception:
-                pass
-
-        return final_text
+        return self.extract_text(response)
 
     def extract_text(self, response: Any) -> str:
         """Extract text blocks from Claude's response."""

@@ -1,210 +1,168 @@
-"""Window and system power management tools for JARVIS.
+"""Window manager - list, focus, minimize, maximize, and close desktop windows.
 
-Handles window minimizing/maximizing, application switching/closing,
-screen locking, and confirmed reboot/shutdown.
+Uses the approved X11 automation interfaces ``wmctrl`` and ``xdotool``. On
+Wayland sessions these helpers may report that they are unavailable.
 """
 
-import os
 import shutil
 import subprocess
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List
 
 from tools.registry import register_tool
 
 
+def _has(command: str) -> bool:
+    return shutil.which(command) is not None
+
+
+def _run(command: List[str], timeout: int = 5):
+    try:
+        proc = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        return proc.returncode == 0, proc.stdout, proc.stderr
+    except Exception as exc:
+        return False, "", str(exc)
+
+
+def _window_command_available() -> bool:
+    return _has("wmctrl") or _has("xdotool")
+
+
 @register_tool({
-    "name": "minimize_window",
-    "description": "Minimize an application window by title or name.",
+    "name": "list_windows",
+    "description": "List currently open desktop windows with their IDs and titles.",
+    "input_schema": {"type": "object", "properties": {}, "required": []},
+})
+def list_windows() -> Dict[str, Any]:
+    """Enumerate open windows."""
+    if not _window_command_available():
+        return {
+            "success": False,
+            "error": "No window control tool found (install wmctrl or xdotool). Wayland sessions are not supported.",
+        }
+
+    windows: List[Dict[str, Any]] = []
+    if _has("wmctrl"):
+        ok, out, err = _run(["wmctrl", "-l"])
+        if ok:
+            for line in out.splitlines():
+                parts = line.split(None, 3)
+                if len(parts) >= 4:
+                    windows.append({"id": parts[0], "desktop": parts[1], "host": parts[2], "title": parts[3]})
+            return {"success": True, "count": len(windows), "windows": windows, "backend": "wmctrl"}
+        return {"success": False, "error": err.strip() or "wmctrl failed."}
+
+    ok, out, _ = _run(["xdotool", "search", "--onlyvisible", "--name", ""])
+    if ok:
+        for wid in out.split():
+            title_ok, title, _ = _run(["xdotool", "getwindowname", wid])
+            windows.append({"id": wid, "title": title.strip() if title_ok else ""})
+    return {"success": True, "count": len(windows), "windows": windows, "backend": "xdotool"}
+
+
+@register_tool({
+    "name": "focus_window",
+    "description": "Bring a window matching the given title to the foreground.",
     "input_schema": {
         "type": "object",
-        "properties": {
-            "title": {"type": "string", "description": "Window title or application name to minimize."},
-        },
+        "properties": {"title": {"type": "string", "description": "Substring of the window title to focus."}},
+        "required": ["title"],
+    },
+})
+def focus_window(title: str) -> Dict[str, Any]:
+    """Focus a window by title substring."""
+    if _has("wmctrl"):
+        ok, _, err = _run(["wmctrl", "-a", title])
+        if ok:
+            return {"success": True, "message": f"Focused window '{title}'."}
+        return {"success": False, "error": err.strip() or f"wmctrl could not focus '{title}'."}
+    if _has("xdotool"):
+        ok, out, _ = _run(["xdotool", "search", "--name", title])
+        ids = out.split()
+        if ok and ids:
+            _run(["xdotool", "windowactivate", ids[0]])
+            return {"success": True, "message": f"Focused window '{title}'."}
+    return {"success": False, "error": "No window control tool found (install wmctrl or xdotool)."}
+
+
+@register_tool({
+    "name": "minimize_window",
+    "description": "Minimize a window matching the given title.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"title": {"type": "string", "description": "Substring of the window title to minimize."}},
         "required": ["title"],
     },
 })
 def minimize_window(title: str) -> Dict[str, Any]:
-    """Minimize a window using xdotool or wmctrl."""
-    if shutil.which("xdotool"):
-        try:
-            # Find window id
-            res = subprocess.run(["xdotool", "search", "--onlyvisible", "--name", title], capture_output=True, text=True, timeout=3)
-            wids = res.stdout.strip().split()
-            if wids:
-                subprocess.run(["xdotool", "windowminimize", wids[0]], check=False, timeout=3)
-                return {"success": True, "message": f"Minimized window matching '{title}'."}
-        except Exception as exc:
-            return {"success": False, "error": f"Failed minimizing window: {str(exc)}"}
-
-    return {"success": True, "simulated": True, "message": f"Window '{title}' minimization signal sent (simulated if headless)."}
+    """Minimize a window."""
+    if _has("wmctrl"):
+        ok, _, err = _run(["wmctrl", "-r", title, "-b", "add,hidden"])
+        if ok:
+            return {"success": True, "message": f"Minimized window '{title}'."}
+        return {"success": False, "error": err.strip() or "wmctrl failed."}
+    if _has("xdotool"):
+        ok, out, _ = _run(["xdotool", "search", "--name", title])
+        ids = out.split()
+        if ids:
+            _run(["xdotool", "windowminimize", ids[0]])
+            return {"success": True, "message": f"Minimized window '{title}'."}
+    return {"success": False, "error": "No window control tool found (install wmctrl or xdotool)."}
 
 
 @register_tool({
     "name": "maximize_window",
-    "description": "Maximize an application window by title or name.",
+    "description": "Maximize a window matching the given title.",
     "input_schema": {
         "type": "object",
-        "properties": {
-            "title": {"type": "string", "description": "Window title or application name to maximize."},
-        },
+        "properties": {"title": {"type": "string", "description": "Substring of the window title to maximize."}},
         "required": ["title"],
     },
 })
 def maximize_window(title: str) -> Dict[str, Any]:
-    """Maximize a window using wmctrl or xdotool."""
-    if shutil.which("wmctrl"):
-        try:
-            res = subprocess.run(["wmctrl", "-r", title, "-b", "add,maximized_vert,maximized_horz"], capture_output=True, timeout=3)
-            if res.returncode == 0:
-                return {"success": True, "message": f"Maximized window matching '{title}'."}
-        except Exception as exc:
-            return {"success": False, "error": f"Failed maximizing window: {str(exc)}"}
-
-    return {"success": True, "simulated": True, "message": f"Window '{title}' maximization signal sent (simulated if headless)."}
+    """Maximize a window."""
+    if _has("wmctrl"):
+        ok, _, err = _run(["wmctrl", "-r", title, "-b", "add,maximized_vert,maximized_horz"])
+        if ok:
+            return {"success": True, "message": f"Maximized window '{title}'."}
+        return {"success": False, "error": err.strip() or "wmctrl failed."}
+    if _has("xdotool"):
+        ok, out, _ = _run(["xdotool", "search", "--name", title])
+        ids = out.split()
+        if ids:
+            _run(["xdotool", "windowsize", ids[0], "100%", "100%"])
+            return {"success": True, "message": f"Maximized window '{title}'."}
+    return {"success": False, "error": "No window control tool found (install wmctrl or xdotool)."}
 
 
 @register_tool({
-    "name": "switch_application",
-    "description": "Switch focus to a running application by name or window title.",
+    "name": "close_window",
+    "description": "Gracefully close a window matching the given title. Requires explicit confirmation.",
     "input_schema": {
         "type": "object",
         "properties": {
-            "app_name": {"type": "string", "description": "Application name or title to switch focus to (e.g. 'code', 'firefox', 'terminal')."},
+            "title": {"type": "string", "description": "Substring of the window title to close."},
+            "confirmed": {"type": "boolean", "description": "Must be true to confirm closing the window."},
         },
-        "required": ["app_name"],
+        "required": ["title"],
     },
 })
-def switch_application(app_name: str) -> Dict[str, Any]:
-    """Switch active window focus."""
-    if shutil.which("wmctrl"):
-        try:
-            res = subprocess.run(["wmctrl", "-a", app_name], capture_output=True, timeout=3)
-            if res.returncode == 0:
-                return {"success": True, "message": f"Switched focus to '{app_name}'."}
-        except Exception:
-            pass
-
-    if shutil.which("xdotool"):
-        try:
-            res = subprocess.run(["xdotool", "search", "--onlyvisible", "--class", app_name], capture_output=True, text=True, timeout=3)
-            wids = res.stdout.strip().split()
-            if wids:
-                subprocess.run(["xdotool", "windowactivate", wids[0]], check=False, timeout=3)
-                return {"success": True, "message": f"Activated window for '{app_name}'."}
-        except Exception:
-            pass
-
-    return {"success": True, "simulated": True, "message": f"Focus switched to '{app_name}'."}
-
-
-@register_tool({
-    "name": "close_application",
-    "description": "Gracefully close an application by name or window title. Level 2 action.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "app_name": {"type": "string", "description": "Application name or title to close."},
-        },
-        "required": ["app_name"],
-    },
-})
-def close_application(app_name: str) -> Dict[str, Any]:
-    """Close an application gracefully."""
-    if shutil.which("wmctrl"):
-        try:
-            res = subprocess.run(["wmctrl", "-c", app_name], capture_output=True, timeout=3)
-            if res.returncode == 0:
-                return {"success": True, "message": f"Close signal sent to '{app_name}' via wmctrl."}
-        except Exception:
-            pass
-
-    # Fallback to kill_process if available
-    try:
-        from tools.computer_control import kill_process
-        return kill_process(name=app_name)
-    except Exception as exc:
-        return {"success": False, "error": f"Failed to close application: {str(exc)}"}
-
-
-@register_tool({
-    "name": "lock_computer",
-    "description": "Lock the workstation screen.",
-    "input_schema": {
-        "type": "object",
-        "properties": {},
-        "required": [],
-    },
-})
-def lock_computer() -> Dict[str, Any]:
-    """Lock the desktop screen."""
-    lock_commands = [
-        ["xdg-screensaver", "lock"],
-        ["loginctl", "lock-session"],
-        ["gnome-screensaver-command", "-l"],
-    ]
-
-    for cmd in lock_commands:
-        if shutil.which(cmd[0]):
-            try:
-                res = subprocess.run(cmd, capture_output=True, timeout=3)
-                if res.returncode == 0:
-                    return {"success": True, "message": "Screen locked successfully."}
-            except Exception:
-                continue
-
-    return {"success": True, "simulated": True, "message": "Screen lock command dispatched (simulated if no active display manager)."}
-
-
-@register_tool({
-    "name": "restart_computer",
-    "description": "Restart the computer. LEVEL 3 sensitive action requiring confirmed=True.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "confirmed": {"type": "boolean", "description": "Explicit confirmation required."},
-        },
-        "required": ["confirmed"],
-    },
-})
-def restart_computer(confirmed: bool = False) -> Dict[str, Any]:
-    """Restart the computer after explicit confirmation."""
+def close_window(title: str, confirmed: bool = False) -> Dict[str, Any]:
+    """Close a window after confirmation."""
     if not confirmed:
         return {
             "success": False,
             "needs_confirmation": True,
-            "error": "Restart blocked. Explicit user confirmation (confirmed=True) is required.",
+            "error": f"Closing window '{title}' requires explicit confirmation.",
         }
-
-    # In production, invokes systemctl reboot
-    return {
-        "success": True,
-        "action": "reboot",
-        "message": "Restart command confirmed and authorized. System restarting.",
-    }
-
-
-@register_tool({
-    "name": "shutdown_computer",
-    "description": "Shut down the computer. LEVEL 3 sensitive action requiring confirmed=True.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "confirmed": {"type": "boolean", "description": "Explicit confirmation required."},
-        },
-        "required": ["confirmed"],
-    },
-})
-def shutdown_computer(confirmed: bool = False) -> Dict[str, Any]:
-    """Shut down the computer after explicit confirmation."""
-    if not confirmed:
-        return {
-            "success": False,
-            "needs_confirmation": True,
-            "error": "Shutdown blocked. Explicit user confirmation (confirmed=True) is required.",
-        }
-
-    return {
-        "success": True,
-        "action": "shutdown",
-        "message": "Shutdown command confirmed and authorized. System powering off.",
-    }
+    if _has("wmctrl"):
+        ok, _, err = _run(["wmctrl", "-c", title])
+        if ok:
+            return {"success": True, "message": f"Closed window '{title}'."}
+        return {"success": False, "error": err.strip() or "wmctrl failed."}
+    if _has("xdotool"):
+        ok, out, _ = _run(["xdotool", "search", "--name", title])
+        ids = out.split()
+        if ids:
+            _run(["xdotool", "windowkill", ids[0]])
+            return {"success": True, "message": f"Closed window '{title}'."}
+    return {"success": False, "error": "No window control tool found (install wmctrl or xdotool)."}

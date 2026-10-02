@@ -269,6 +269,35 @@ Conversation recall is available at `/api/memory/conversations/search`. Computer
 
 ---
 
+## Security Architecture (Permission Manager)
+
+Stage 10 introduces the security core that mediates every action:
+
+```
+AI Assistant  ->  Permission Manager  ->  Approved Tool / API  ->  Operating System
+```
+
+- **`security/permission_manager.py`** — classifies each tool/command into one of
+  four permission levels (INFORMATION, SAFE_AUTOMATION, SYSTEM_CHANGES,
+  DESTRUCTIVE). LEVEL 0/1 run automatically; LEVEL 2/3 require explicit
+  confirmation. Terminal commands get an independent LOW/MEDIUM/HIGH grade.
+- **`security/emergency.py`** — a global, thread-safe emergency stop. Saying
+  "Jarvis stop", "Jarvis cancel", or "Emergency stop" immediately halts commands,
+  cancels queued automations, and blocks tool execution until control is restored.
+- **Enforcement point** — `tools/registry.execute_tool` refuses or defers any
+  gated action, so the language model can never bypass the Permission Manager.
+- **Audit log** — every execution is appended to `data/command_audit.log` with
+  timestamp, tool, risk level, status, and result. Secrets are always redacted.
+
+New desktop modules registered as tools: `tools/clipboard.py` (clipboard read /
+write / clear), `tools/window_manager.py` (list / focus / minimize / maximize /
+close windows), `tools/file_manager.py` (find files, large files, duplicates,
+organize folders, recycle-bin deletes), `tools/security_manager.py` (status,
+audit log, emergency control, risk preview) and `tools/serious_mode.py` (strict
+confirmation mode).
+
+---
+
 ## Always-On Background Daemon (Stage 9)
 
 Run the background daemon to continuously monitor reminders and system tasks:
@@ -285,6 +314,12 @@ Inside the terminal CLI (`python3 main.py`):
 - `/help` — Display command cheat sheet
 - `/memory` — Inspect all long-term memories in formatted tables
 - `/tools` — List all registered tools and schemas
+- `/status` — System + security status report
+- `/security` — Permission model and emergency state
+- `/audit` — Recent action audit log
+- `/stop` — EMERGENCY STOP (halt commands and automations)
+- `/resume` — Release the emergency stop
+- `/serious` — Toggle serious mode (confirm every state change)
 - `/dashboard` — Display web dashboard URL
 - `/clear` — Clear current conversation message history
 - `/exit` — Shut down Jarvis
@@ -293,7 +328,7 @@ Inside the terminal CLI (`python3 main.py`):
 
 ## Running Automated Tests
 
-Run the full pytest test suite (26 unit tests):
+Run the full pytest test suite:
 
 ```bash
 source venv/bin/activate
@@ -311,6 +346,7 @@ pytest tests/ -v
 - [x] **Stage 5**: Calendar & Timed Reminders System
 - [x] **Stage 6-9**: Cybernetic Web Dashboard UI & Always-On Daemon
 - [x] **Developer Mission**: Guarded project inspection and test workflow
+- [x] **Stage 10**: Permission Manager, Emergency Stop, Audit Log & desktop plugin modules
 
 ## Troubleshooting
 

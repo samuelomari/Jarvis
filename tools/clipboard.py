@@ -1,161 +1,130 @@
-"""Clipboard manager tools for JARVIS.
+"""Clipboard manager - read, write, and clear the system clipboard on request.
 
-Allows reading, copying, and clearing clipboard on explicit request.
-Never continuously monitors clipboard.
+The clipboard is only ever touched when the user explicitly asks for it; Jarvis
+never monitors it continuously.
 """
 
 import shutil
 import subprocess
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from tools.registry import register_tool
 
-# Internal fallback buffer when GUI clipboard utilities are not present
-_FALLBACK_CLIPBOARD = ""
+
+def _run(command: List[str], input_text: Optional[str] = None, timeout: int = 5):
+    """Run a clipboard helper command and return (ok, stdout, stderr)."""
+    try:
+        proc = subprocess.run(
+            command,
+            input=input_text,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        return proc.returncode == 0, proc.stdout, proc.stderr
+    except Exception as exc:
+        return False, "", str(exc)
 
 
-def _get_system_clipboard() -> str:
-    """Retrieve text from OS clipboard using available tools."""
-    global _FALLBACK_CLIPBOARD
-
-    # 1. Wayland
+def _read_commands() -> List[List[str]]:
+    commands = []
     if shutil.which("wl-paste"):
-        try:
-            res = subprocess.run(["wl-paste", "--no-newline"], capture_output=True, text=True, timeout=2)
-            if res.returncode == 0:
-                return res.stdout
-        except Exception:
-            pass
-
-    # 2. X11 xclip
+        commands.append(["wl-paste", "--no-newline"])
     if shutil.which("xclip"):
-        try:
-            res = subprocess.run(["xclip", "-selection", "clipboard", "-o"], capture_output=True, text=True, timeout=2)
-            if res.returncode == 0:
-                return res.stdout
-        except Exception:
-            pass
-
-    # 3. X11 xsel
+        commands.append(["xclip", "-selection", "clipboard", "-o"])
     if shutil.which("xsel"):
-        try:
-            res = subprocess.run(["xsel", "--clipboard", "--output"], capture_output=True, text=True, timeout=2)
-            if res.returncode == 0:
-                return res.stdout
-        except Exception:
-            pass
-
-    # 4. macOS pbpaste
-    if shutil.which("pbpaste"):
-        try:
-            res = subprocess.run(["pbpaste"], capture_output=True, text=True, timeout=2)
-            if res.returncode == 0:
-                return res.stdout
-        except Exception:
-            pass
-
-    return _FALLBACK_CLIPBOARD
+        commands.append(["xsel", "--clipboard", "--output"])
+    return commands
 
 
-def _set_system_clipboard(text: str) -> bool:
-    """Write text to OS clipboard using available tools."""
-    global _FALLBACK_CLIPBOARD
-    _FALLBACK_CLIPBOARD = text
-    success = False
-
-    # 1. Wayland
+def _write_commands() -> List[List[str]]:
+    commands = []
     if shutil.which("wl-copy"):
-        try:
-            res = subprocess.run(["wl-copy"], input=text, text=True, timeout=2)
-            if res.returncode == 0:
-                success = True
-        except Exception:
-            pass
-
-    # 2. X11 xclip
+        commands.append(["wl-copy"])
     if shutil.which("xclip"):
-        try:
-            res = subprocess.run(["xclip", "-selection", "clipboard"], input=text, text=True, timeout=2)
-            if res.returncode == 0:
-                success = True
-        except Exception:
-            pass
-
-    # 3. X11 xsel
+        commands.append(["xclip", "-selection", "clipboard"])
     if shutil.which("xsel"):
-        try:
-            res = subprocess.run(["xsel", "--clipboard", "--input"], input=text, text=True, timeout=2)
-            if res.returncode == 0:
-                success = True
-        except Exception:
-            pass
-
-    # 4. macOS pbcopy
-    if shutil.which("pbcopy"):
-        try:
-            res = subprocess.run(["pbcopy"], input=text, text=True, timeout=2)
-            if res.returncode == 0:
-                success = True
-        except Exception:
-            pass
-
-    return True
+        commands.append(["xsel", "--clipboard", "--input"])
+    return commands
 
 
 @register_tool({
-    "name": "read_clipboard",
-    "description": "Read the current contents of the system clipboard. Only called upon explicit user request.",
-    "input_schema": {
-        "type": "object",
-        "properties": {},
-        "required": [],
-    },
+    "name": "get_clipboard",
+    "description": "Read the current contents of the system clipboard (only when explicitly requested).",
+    "input_schema": {"type": "object", "properties": {}, "required": []},
 })
-def read_clipboard() -> Dict[str, Any]:
-    """Read clipboard content upon user request."""
-    content = _get_system_clipboard()
+def get_clipboard() -> Dict[str, Any]:
+    """Return the clipboard text."""
+    try:
+        import pyperclip  # type: ignore
+
+        text = pyperclip.paste()
+        if text is not None:
+            return {"success": True, "content": text, "length": len(text), "backend": "pyperclip"}
+    except Exception:
+        pass
+
+    for command in _read_commands():
+        ok, out, err = _run(command)
+        if ok:
+            return {"success": True, "content": out, "length": len(out), "backend": command[0]}
+
     return {
-        "success": True,
-        "content": content,
-        "length": len(content),
-        "message": f"Clipboard content read ({len(content)} characters)." if content else "Clipboard is empty.",
+        "success": False,
+        "error": "No clipboard tool available (install wl-clipboard, xclip, or xsel).",
     }
 
 
 @register_tool({
-    "name": "copy_to_clipboard",
-    "description": "Copy specified text to the system clipboard.",
+    "name": "set_clipboard",
+    "description": "Copy the provided text to the system clipboard.",
     "input_schema": {
         "type": "object",
-        "properties": {
-            "text": {"type": "string", "description": "Text content to copy to clipboard."},
-        },
+        "properties": {"text": {"type": "string", "description": "Text to place on the clipboard."}},
         "required": ["text"],
     },
 })
-def copy_to_clipboard(text: str) -> Dict[str, Any]:
-    """Copy text to clipboard."""
-    _set_system_clipboard(text)
+def set_clipboard(text: str) -> Dict[str, Any]:
+    """Write text to the clipboard."""
+    try:
+        import pyperclip  # type: ignore
+
+        pyperclip.copy(text)
+        return {"success": True, "message": f"Copied {len(text)} characters to the clipboard.", "backend": "pyperclip"}
+    except Exception:
+        pass
+
+    for command in _write_commands():
+        ok, _, err = _run(command, input_text=text)
+        if ok:
+            return {"success": True, "message": f"Copied {len(text)} characters to the clipboard.", "backend": command[0]}
+
     return {
-        "success": True,
-        "length": len(text),
-        "message": f"Copied {len(text)} characters to clipboard.",
+        "success": False,
+        "error": "No clipboard tool available (install wl-clipboard, xclip, or xsel).",
     }
 
 
 @register_tool({
     "name": "clear_clipboard",
-    "description": "Clear the system clipboard contents.",
+    "description": "Clear the system clipboard.",
     "input_schema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+            "confirm": {"type": "boolean", "description": "Must be true to clear the clipboard."},
+        },
         "required": [],
     },
 })
-def clear_clipboard() -> Dict[str, Any]:
-    """Clear clipboard."""
-    _set_system_clipboard("")
-    return {
-        "success": True,
-        "message": "Clipboard cleared successfully.",
-    }
+def clear_clipboard(confirm: bool = False) -> Dict[str, Any]:
+    """Clear the clipboard after confirmation."""
+    if not confirm:
+        return {
+            "success": False,
+            "needs_confirmation": True,
+            "error": "Clearing the clipboard requires confirmation (confirm=true).",
+        }
+    result = set_clipboard("")
+    if result.get("success"):
+        result["message"] = "Clipboard cleared."
+    return result

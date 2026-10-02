@@ -1,333 +1,415 @@
-"""Permission Manager & Security Controller for JARVIS.
+"""Permission Manager - the central guard between the AI reasoning layer and the OS.
 
-Enforces 4-tier security levels:
-LEVEL 0 - INFORMATION: No confirmation required (read-only, status, inspection)
-LEVEL 1 - SAFE AUTOMATION: No confirmation required (open apps, launch VS Code, safe file creation)
-LEVEL 2 - SYSTEM CHANGES: Explain the action and request confirmation (install packages, modify configs, send email, kill user processes)
-LEVEL 3 - DESTRUCTIVE OR SECURITY-SENSITIVE ACTIONS: Always require explicit confirmation (permanent delete, restart, shutdown, sudo)
+Architecture enforced by this module:
 
-Maintains a secure, sanitized audit trail.
+    AI Assistant
+        |
+    Permission Manager   <-- this file
+        |
+    Approved Tool / API
+        |
+    Operating System
+
+Every tool execution flows through :meth:`PermissionManager.check`. The manager
+classifies the request into one of four permission levels, decides whether the
+action is allowed automatically, requires an explicit confirmation, or must be
+blocked outright, and records an audit entry (never storing secrets).
 """
 
-from datetime import datetime, timezone
-from enum import IntEnum
+from __future__ import annotations
+
 import json
-import logging
-from pathlib import Path
 import re
+from dataclasses import dataclass, field, asdict
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-AUDIT_LOG_FILE = PROJECT_ROOT / "data" / "audit_log.json"
+AUDIT_LOG_FILE = PROJECT_ROOT / "data" / "command_audit.log"
 
 
-class PermissionLevel(IntEnum):
-    LEVEL_0_INFORMATION = 0
-    LEVEL_1_SAFE_AUTOMATION = 1
-    LEVEL_2_SYSTEM_CHANGES = 2
-    LEVEL_3_DESTRUCTIVE_OR_SENSITIVE = 3
+# ── Permission Levels ──────────────────────────────────────────────────────────
+
+class PermissionLevel:
+    """Four-tier permission model described in the Jarvis system contract."""
+
+    INFORMATION = 0        # Read-only. No confirmation required.
+    SAFE_AUTOMATION = 1    # Reversible automation. No confirmation required.
+    SYSTEM_CHANGE = 2      # Explain action + request confirmation.
+    DESTRUCTIVE = 3        # Always require explicit confirmation.
+
+    NAMES = {
+        0: "INFORMATION",
+        1: "SAFE_AUTOMATION",
+        2: "SYSTEM_CHANGE",
+        3: "DESTRUCTIVE",
+    }
+
+    #: Any action at or above this level requires explicit confirmation.
+    CONFIRMATION_THRESHOLD = SYSTEM_CHANGE
 
 
-# Tool classification mapping
-TOOL_PERMISSION_MAP: Dict[str, PermissionLevel] = {
-    # LEVEL 0: Information / Read-Only
-    "get_current_time": PermissionLevel.LEVEL_0_INFORMATION,
-    "get_system_health": PermissionLevel.LEVEL_0_INFORMATION,
-    "get_disk_usage": PermissionLevel.LEVEL_0_INFORMATION,
-    "get_network_info": PermissionLevel.LEVEL_0_INFORMATION,
-    "get_running_processes": PermissionLevel.LEVEL_0_INFORMATION,
-    "check_port": PermissionLevel.LEVEL_0_INFORMATION,
-    "check_proactive_alerts": PermissionLevel.LEVEL_0_INFORMATION,
-    "list_directory": PermissionLevel.LEVEL_0_INFORMATION,
-    "read_file": PermissionLevel.LEVEL_0_INFORMATION,
-    "search_files": PermissionLevel.LEVEL_0_INFORMATION,
-    "inspect_symbols": PermissionLevel.LEVEL_0_INFORMATION,
-    "analyze_codebase": PermissionLevel.LEVEL_0_INFORMATION,
-    "search_web": PermissionLevel.LEVEL_0_INFORMATION,
-    "fetch_webpage": PermissionLevel.LEVEL_0_INFORMATION,
-    "calendar_list_events": PermissionLevel.LEVEL_0_INFORMATION,
-    "list_calendar_events": PermissionLevel.LEVEL_0_INFORMATION,
-    "list_tasks": PermissionLevel.LEVEL_0_INFORMATION,
-    "list_reminders": PermissionLevel.LEVEL_0_INFORMATION,
-    "list_user_notifications": PermissionLevel.LEVEL_0_INFORMATION,
-    "list_scheduled_tasks": PermissionLevel.LEVEL_0_INFORMATION,
-    "list_available_agents": PermissionLevel.LEVEL_0_INFORMATION,
-    "list_installed_packages": PermissionLevel.LEVEL_0_INFORMATION,
-    "list_pomodoro_sessions": PermissionLevel.LEVEL_0_INFORMATION,
-    "check_pomodoro": PermissionLevel.LEVEL_0_INFORMATION,
-    "daily_agenda": PermissionLevel.LEVEL_0_INFORMATION,
-    "explain_developer_failure": PermissionLevel.LEVEL_0_INFORMATION,
-    "get_command_audit_log": PermissionLevel.LEVEL_0_INFORMATION,
-    "github_list_repos": PermissionLevel.LEVEL_0_INFORMATION,
-    "gmail_search_messages": PermissionLevel.LEVEL_0_INFORMATION,
-    "search_emails": PermissionLevel.LEVEL_0_INFORMATION,
-    "read_email": PermissionLevel.LEVEL_0_INFORMATION,
-    "git_status": PermissionLevel.LEVEL_0_INFORMATION,
-    "git_diff": PermissionLevel.LEVEL_0_INFORMATION,
-    "git_log": PermissionLevel.LEVEL_0_INFORMATION,
-    "read_clipboard": PermissionLevel.LEVEL_0_INFORMATION,
-    "recall": PermissionLevel.LEVEL_0_INFORMATION,
-    "take_screenshot": PermissionLevel.LEVEL_0_INFORMATION,
-    "analyze_screenshot": PermissionLevel.LEVEL_0_INFORMATION,
-    "analyze_image_file": PermissionLevel.LEVEL_0_INFORMATION,
-    "read_screen_text": PermissionLevel.LEVEL_0_INFORMATION,
+# ── Risk Classification ────────────────────────────────────────────────────────
 
-    # LEVEL 1: Safe Automation
-    "open_application": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "open_browser_url": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "write_file": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "append_file": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "edit_file": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "create_directory": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "copy_file": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "move_file": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "trash_file": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "find_large_files": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "find_duplicate_files": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "organize_folder": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "speak_text": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "voice_speak": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "voice_listen": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "copy_to_clipboard": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "clear_clipboard": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "set_volume": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "set_brightness": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "minimize_window": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "maximize_window": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "switch_application": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "lock_computer": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "remember": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "forget": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "add_task": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "complete_task": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "set_reminder": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "dismiss_reminder": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "notify_user": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "start_pomodoro": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "generate_code": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "scaffold_project": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "run_tests": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "git_commit": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "git_create_branch": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "serious_mode_research": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "delegate_task": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-    "draft_email": PermissionLevel.LEVEL_1_SAFE_AUTOMATION,
-
-    # LEVEL 2: System Changes (Requires confirmation / explanation)
-    "install_package": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-    "close_application": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-    "kill_process": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-    "git_push": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-    "schedule_autonomous_task": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-    "cancel_scheduled_task": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-    "run_autonomous_mission": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-    "run_multi_agent_workflow": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-    "create_calendar_event": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-    "send_email": PermissionLevel.LEVEL_2_SYSTEM_CHANGES,
-
-    # LEVEL 3: Destructive or Security-Sensitive (Explicit confirmation required)
-    "delete_file": PermissionLevel.LEVEL_3_DESTRUCTIVE_OR_SENSITIVE,
-    "restart_computer": PermissionLevel.LEVEL_3_DESTRUCTIVE_OR_SENSITIVE,
-    "shutdown_computer": PermissionLevel.LEVEL_3_DESTRUCTIVE_OR_SENSITIVE,
+# Level 0 - INFORMATION: never mutates state, no confirmation.
+INFORMATION_TOOLS = {
+    "get_current_time", "get_system_health", "get_disk_usage", "get_network_info",
+    "get_running_processes", "check_proactive_alerts", "check_port", "read_file",
+    "list_directory", "search_files", "inspect_symbols", "analyze_codebase",
+    "explain_developer_failure", "git_status", "git_log", "git_diff", "recall",
+    "list_tasks", "list_reminders", "list_calendar_events", "list_scheduled_tasks",
+    "list_installed_packages", "list_available_agents", "list_user_notifications",
+    "list_pomodoro_sessions", "daily_agenda", "search_web", "fetch_webpage",
+    "github_list_repos", "gmail_search_messages", "calendar_list_events",
+    "get_command_audit_log", "get_audit_log", "get_permission_status",
+    "system_status", "classify_action_risk", "get_emergency_status",
+    "emergency_stop", "resume_operations", "set_serious_mode",
+    "get_serious_mode_status",
 }
 
-# Dangerous terminal command patterns
-HIGH_RISK_TERMINAL_PATTERNS = [
-    r"\brm\s+(-[rfRF]+\s+|--recursive)",
-    r"\bmkfs\b",
-    r"\bdd\s+if=",
-    r"\bchmod\s+(-R\s+)?777\b",
-    r"\bchown\s+-R\b",
-    r"\bshutdown\b",
-    r"\breboot\b",
-    r"\bpoweroff\b",
-    r"\bhalt\b",
-    r"\biptables\b",
-    r"\bufw\b",
-    r"\buseradd\b",
-    r"\buserdel\b",
-    r"\busermod\b",
-    r"\bpasswd\b",
-    r"\bsudo\b",
-    r">\s*/dev/sd[a-z]",
-    r">\s*/dev/nvme",
-    r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;",  # Fork bomb
+# Level 1 - SAFE_AUTOMATION: ordinary, reversible local automation.
+SAFE_AUTOMATION_TOOLS = {
+    "write_file", "append_file", "edit_file", "create_directory", "copy_file",
+    "move_file", "open_application", "open_browser_url", "take_screenshot",
+    "analyze_screenshot", "analyze_image_file", "read_screen_text", "set_volume",
+    "set_brightness", "get_clipboard", "set_clipboard", "clear_clipboard",
+    "list_windows", "focus_window", "minimize_window", "maximize_window",
+    "speak_text", "remember", "forget", "notify_user", "create_calendar_event",
+    "create_event", "set_reminder", "dismiss_reminder", "add_task", "complete_task",
+    "git_create_branch", "git_commit", "generate_code", "scaffold_project",
+    "start_pomodoro", "check_pomodoro", "find_large_files", "find_duplicate_files",
+    "find_files", "organize_directory", "run_tests", "delegate_task",
+}
+
+# Level 2 - SYSTEM_CHANGE: mutates the host or moves data off-machine.
+SYSTEM_CHANGE_TOOLS = {
+    "install_package", "kill_process", "close_window", "git_push",
+    "schedule_autonomous_task", "cancel_scheduled_task", "run_autonomous_mission",
+    "run_multi_agent_workflow",
+}
+
+# Level 3 - DESTRUCTIVE: irreversible or security-sensitive.
+DESTRUCTIVE_TOOLS = {
+    "delete_file", "move_to_trash", "lock_screen", "restart_computer",
+    "shutdown_computer",
+}
+
+# Shell command risk: LOW runs automatically, MEDIUM/HIGH need confirmation.
+DANGEROUS_PATTERNS = [
+    "rm -rf", "rm -fr", "mkfs", "dd if=", ":(){:|:&};:", "chmod 777 /",
+    "sudo rm", "> /dev/sda", "shutdown", "reboot", "halt", "poweroff",
+    "drop table", "delete from", "truncate table", "chown -r /", "iptables -f",
+    "ufw disable", "passwd", "visudo", "> /dev/nvme",
 ]
 
-MEDIUM_RISK_TERMINAL_PATTERNS = [
-    r"\bpip\s+install\b",
-    r"\bnpm\s+install\b",
-    r"\bapt(-get)?\s+install\b",
-    r"\bgit\s+push\b",
-    r"\bkill\b",
-    r"\bpkill\b",
-    r"\bsystemctl\s+(start|stop|restart)\b",
-    r"\bservice\s+\w+\s+(start|stop|restart)\b",
+MEDIUM_RISK_PATTERNS = [
+    "pip install", "pip3 install", "npm install", "npm i ", "yarn add",
+    "apt install", "apt-get install", "snap install", "cargo install",
+    "npm run", "yarn run", "make install", "chmod ", "chown ", "systemctl ",
+    "service ", "git push", "git reset", "git clean", "kill ", "pkill ",
+    "docker run", "docker rm",
 ]
 
-# Sensitive credentials redaction regexes
-SECRET_PATTERNS = [
-    (r"(?i)(api[_-]?key|secret|password|passwd|auth[_-]?token|bearer|access[_-]?token)[\"']?\s*[:=]\s*[\"']?([^\"'\s,;&]+)", r"\1=***REDACTED***"),
-    (r"sk-[a-zA-Z0-9_\-]{20,}", "***REDACTED_API_KEY***"),
-    (r"ghp_[a-zA-Z0-9]{36}", "***REDACTED_GITHUB_TOKEN***"),
-    (r"-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA )?PRIVATE KEY-----", "***REDACTED_PRIVATE_KEY***"),
-]
+SENSITIVE_KEY_PATTERN = re.compile(
+    r"(password|passwd|secret|token|api[_-]?key|private[_-]?key|access[_-]?key|"
+    r"client[_-]?secret|credential|cookie|session|auth)",
+    re.IGNORECASE,
+)
+
+REDACTED = "***REDACTED***"
 
 
-def sanitize_secrets(text: Any) -> Any:
-    """Sanitize sensitive keys, tokens, or passwords from logs or display."""
-    if isinstance(text, dict):
-        return {k: sanitize_secrets(v) for k, v in text.items()}
-    if isinstance(text, list):
-        return [sanitize_secrets(i) for i in text]
-    if not isinstance(text, str):
-        return text
+# ── Decision Model ─────────────────────────────────────────────────────────────
 
-    sanitized = text
-    for pattern, replacement in SECRET_PATTERNS:
-        sanitized = re.sub(pattern, replacement, sanitized)
-    return sanitized
+@dataclass
+class Decision:
+    """Outcome of a permission check for a single action."""
 
+    tool: str
+    level: int
+    allowed: bool
+    requires_confirmation: bool
+    blocked: bool
+    reason: str
+    risk_label: str = ""
+    action: str = ""
+    affected: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    def to_tool_result(self) -> Dict[str, Any]:
+        """Standard tool-shaped refusal/confirmation payload."""
+        if self.blocked:
+            return {
+                "success": False,
+                "blocked": True,
+                "risk_level": self.risk_label,
+                "error": self.reason,
+            }
+        return {
+            "success": False,
+            "needs_confirmation": True,
+            "risk_level": self.risk_label,
+            "error": self.reason,
+            "preview": self.preview(),
+        }
+
+    def preview(self) -> Dict[str, Any]:
+        """Command preview block shown to the user before sensitive actions."""
+        return {
+            "Task": self.action or f"Execute tool '{self.tool}'",
+            "Risk level": self.risk_label or PermissionLevel.NAMES.get(self.level, "UNKNOWN"),
+            "Command or action": self.action or self.tool,
+            "Files/services affected": self.affected or ["(none detected)"],
+        }
+
+    def render_preview(self) -> str:
+        """Human readable multi-line preview for the CLI."""
+        lines = ["", "  ┌─ CONFIRMATION REQUIRED ──────────────────────────"]
+        for key, value in self.preview().items():
+            if isinstance(value, list):
+                value = ", ".join(str(v) for v in value)
+            lines.append(f"  │ {key}: {value}")
+        lines.append("  └──────────────────────────────────────────────")
+        return "\n".join(lines)
+
+
+def _classify_command(command: str) -> Tuple[int, str, Optional[str]]:
+    """Classify a shell command into a permission level.
+
+    Returns ``(level, reason, matched_pattern)``.
+    """
+    cmd_lower = (command or "").lower()
+
+    for pattern in DANGEROUS_PATTERNS:
+        if pattern.lower() in cmd_lower:
+            return (
+                PermissionLevel.DESTRUCTIVE,
+                f"Command contains destructive pattern '{pattern}'.",
+                pattern,
+            )
+
+    if cmd_lower.strip().startswith("sudo ") or " sudo " in f" {cmd_lower} ":
+        return (
+            PermissionLevel.DESTRUCTIVE,
+            "Command requests elevated (sudo) privileges.",
+            "sudo",
+        )
+
+    for pattern in MEDIUM_RISK_PATTERNS:
+        if pattern.lower() in cmd_lower:
+            return (
+                PermissionLevel.SYSTEM_CHANGE,
+                f"Command modifies the environment ('{pattern.strip()}').",
+                pattern.strip(),
+            )
+
+    return (
+        PermissionLevel.SAFE_AUTOMATION,
+        "Read-only or low-impact command.",
+        None,
+    )
+
+
+def redact_args(args: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Return a copy of tool arguments with sensitive values redacted."""
+    if not args:
+        return {}
+    clean: Dict[str, Any] = {}
+    for key, value in args.items():
+        if SENSITIVE_KEY_PATTERN.search(str(key)):
+            clean[key] = REDACTED
+        elif isinstance(value, str) and len(value) > 300:
+            clean[key] = value[:300] + "...(truncated)"
+        else:
+            clean[key] = value
+    return clean
+
+
+# ── Permission Manager ─────────────────────────────────────────────────────────
 
 class PermissionManager:
-    """Evaluates security levels, handles previews, confirmations, and audit logging."""
+    """Decides whether an action is allowed, confirmed, or blocked."""
 
-    def __init__(self, audit_file: Optional[Path] = None):
-        self.audit_file = audit_file or AUDIT_LOG_FILE
+    def __init__(
+        self,
+        audit_log_path: Optional[Path] = None,
+        auto_confirm_level: int = PermissionLevel.SAFE_AUTOMATION,
+    ):
+        self.audit_log_path = Path(audit_log_path) if audit_log_path else AUDIT_LOG_FILE
+        #: Actions at or below this level never prompt.
+        self.auto_confirm_level = auto_confirm_level
+        self._default_auto_confirm_level = auto_confirm_level
+        self._serious_mode = False
 
-    def classify_terminal_command(self, command: str) -> Tuple[PermissionLevel, str]:
-        """Classify a shell command into LOW (Level 0/1), MEDIUM (Level 2), or HIGH (Level 3) risk."""
-        cmd_clean = command.strip()
-        for pattern in HIGH_RISK_TERMINAL_PATTERNS:
-            if re.search(pattern, cmd_clean, re.IGNORECASE):
-                return PermissionLevel.LEVEL_3_DESTRUCTIVE_OR_SENSITIVE, f"High-risk pattern matched: {pattern}"
+    @property
+    def serious_mode(self) -> bool:
+        """When enabled, every mutating action (LEVEL 1+) requires confirmation."""
+        return self._serious_mode
 
-        for pattern in MEDIUM_RISK_TERMINAL_PATTERNS:
-            if re.search(pattern, cmd_clean, re.IGNORECASE):
-                return PermissionLevel.LEVEL_2_SYSTEM_CHANGES, f"System change pattern matched: {pattern}"
+    def set_serious_mode(self, enabled: bool) -> Dict[str, Any]:
+        """Toggle strict confirmation mode.
 
-        return PermissionLevel.LEVEL_1_SAFE_AUTOMATION, "Low-risk command"
+        In serious mode Jarvis prompts before *any* state-changing action, not
+        just LEVEL 2/3 operations.
+        """
+        self._serious_mode = bool(enabled)
+        self.auto_confirm_level = (
+            PermissionLevel.INFORMATION if self._serious_mode
+            else self._default_auto_confirm_level
+        )
+        return {
+            "success": True,
+            "serious_mode": self._serious_mode,
+            "auto_confirm_level": self.auto_confirm_level,
+            "message": (
+                "Serious mode enabled: all state-changing actions require confirmation."
+                if self._serious_mode
+                else "Serious mode disabled: normal permissions restored."
+            ),
+        }
 
-    def classify_tool(self, tool_name: str, tool_args: Dict[str, Any]) -> Tuple[PermissionLevel, str]:
-        """Classify a tool call into its permission level."""
-        if tool_name == "run_terminal_command":
-            cmd = tool_args.get("command", "")
-            return self.classify_terminal_command(cmd)
+    # -- Classification --------------------------------------------------------
 
-        level = TOOL_PERMISSION_MAP.get(tool_name, PermissionLevel.LEVEL_2_SYSTEM_CHANGES)
-        reason = f"Standard classification for '{tool_name}'"
+    def classify_command(self, command: str) -> Tuple[int, str]:
+        """Public wrapper around shell command risk classification."""
+        level, reason, _ = _classify_command(command)
         return level, reason
 
-    def build_command_preview(
+    def classify_tool(self, tool_name: str, args: Optional[Dict[str, Any]] = None) -> Tuple[int, str]:
+        """Map a tool invocation to a permission level and explanation."""
+        if tool_name == "run_terminal_command":
+            return self.classify_command((args or {}).get("command", ""))
+
+        if tool_name in DESTRUCTIVE_TOOLS:
+            return PermissionLevel.DESTRUCTIVE, "Irreversible or security-sensitive action."
+        if tool_name in SYSTEM_CHANGE_TOOLS:
+            return PermissionLevel.SYSTEM_CHANGE, "Changes host state or pushes data externally."
+        if tool_name in SAFE_AUTOMATION_TOOLS:
+            return PermissionLevel.SAFE_AUTOMATION, "Reversible local automation."
+        if tool_name in INFORMATION_TOOLS:
+            return PermissionLevel.INFORMATION, "Read-only information request."
+
+        # Unknown tools default to safe automation; they still surface in the audit log.
+        return PermissionLevel.SAFE_AUTOMATION, "Unclassified tool (treated as reversible automation)."
+
+    # -- Decision --------------------------------------------------------------
+
+    def check(
         self,
-        task: str,
         tool_name: str,
-        tool_args: Dict[str, Any],
-        level: PermissionLevel,
-    ) -> str:
-        """
-        Format standard command preview required by JARVIS specification:
-        Task:
-        Risk level:
-        Command or action:
-        Files/services affected:
-        Proceed? yes/no
-        """
-        clean_args = sanitize_secrets(tool_args)
-        level_name = {
-            PermissionLevel.LEVEL_0_INFORMATION: "LEVEL 0 — INFORMATION",
-            PermissionLevel.LEVEL_1_SAFE_AUTOMATION: "LEVEL 1 — SAFE AUTOMATION",
-            PermissionLevel.LEVEL_2_SYSTEM_CHANGES: "LEVEL 2 — SYSTEM CHANGES",
-            PermissionLevel.LEVEL_3_DESTRUCTIVE_OR_SENSITIVE: "LEVEL 3 — DESTRUCTIVE OR SECURITY-SENSITIVE",
-        }.get(level, str(level))
+        args: Optional[Dict[str, Any]] = None,
+        confirmed: bool = False,
+    ) -> Decision:
+        """Evaluate a tool invocation and return a :class:`Decision`."""
+        args = args or {}
+        if args.get("confirmed") is True:
+            confirmed = True
 
-        target = (
-            clean_args.get("path")
-            or clean_args.get("command")
-            or clean_args.get("app_name")
-            or clean_args.get("to")
-            or clean_args.get("pid")
-            or "Local system"
+        level, reason = self.classify_tool(tool_name, args)
+        risk_label = PermissionLevel.NAMES.get(level, "UNKNOWN")
+
+        action = tool_name
+        if tool_name == "run_terminal_command":
+            action = f"$ {args.get('command', '')}"
+        elif tool_name == "open_application":
+            action = f"Launch '{args.get('app_name', '')}'"
+        elif tool_name == "install_package":
+            action = f"Install package '{args.get('package', '')}'"
+        elif tool_name in ("delete_file", "move_to_trash"):
+            action = f"Delete '{args.get('path', '')}'"
+
+        affected = [
+            str(value) for key, value in args.items()
+            if key in ("path", "file_path", "source_path", "destination_path",
+                       "app_name", "package", "service")
+        ]
+
+        decision = Decision(
+            tool=tool_name,
+            level=level,
+            allowed=True,
+            requires_confirmation=False,
+            blocked=False,
+            reason=reason,
+            risk_label=risk_label,
+            action=action,
+            affected=affected,
         )
 
-        return (
-            f"\n[bold yellow]── SECURITY COMMAND PREVIEW ─────────────────────[/bold yellow]\n"
-            f"Task:                    {task}\n"
-            f"Risk level:              {level_name}\n"
-            f"Command or action:       {tool_name}({json.dumps(clean_args)})\n"
-            f"Files/services affected: {target}\n"
-            f"─────────────────────────────────────────────────\n"
-            f"Proceed? yes/no"
-        )
+        if level > self.auto_confirm_level and not confirmed:
+            decision.allowed = False
+            decision.requires_confirmation = True
+            if level >= PermissionLevel.DESTRUCTIVE:
+                decision.reason = f"{reason} Explicit confirmation required before proceeding."
+            else:
+                decision.reason = f"{reason} Please confirm before proceeding."
+        elif level > self.auto_confirm_level and confirmed:
+            decision.reason = f"{reason} Confirmation received."
 
-    def is_allowed_automatically(self, level: PermissionLevel) -> bool:
-        """Level 0 and 1 execute automatically; Level 2 and 3 require confirmation."""
-        return level in (PermissionLevel.LEVEL_0_INFORMATION, PermissionLevel.LEVEL_1_SAFE_AUTOMATION)
+        return decision
 
-    def log_action(
+    # -- Audit Log -------------------------------------------------------------
+
+    def log(
         self,
-        request_text: str,
-        actions_performed: str,
-        commands_executed: str,
+        tool_name: str,
+        args: Optional[Dict[str, Any]],
         result: Any,
-        level: PermissionLevel,
-        status: str = "COMPLETED",
+        level: int,
+        status: str,
+        request: str = "",
     ) -> None:
-        """Record an entry in the structured audit log with secret redaction."""
+        """Append a single audit entry. Secrets are always redacted."""
         try:
-            self.audit_file.parent.mkdir(parents=True, exist_ok=True)
-            entry = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "request": sanitize_secrets(request_text)[:500],
-                "actions_performed": sanitize_secrets(actions_performed),
-                "commands_executed": sanitize_secrets(commands_executed)[:500],
-                "result": sanitize_secrets(str(result))[:1000],
-                "risk_level": int(level),
-                "level_name": level.name,
-                "status": status,
-            }
+            self.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().isoformat()
+            safe_args = redact_args(args)
+            if isinstance(result, dict):
+                summary = result.get("message") or result.get("error") or (
+                    "ok" if result.get("success") else "failed"
+                )
+            else:
+                summary = str(result)
+            summary = str(summary)[:200]
+            risk = PermissionLevel.NAMES.get(level, "UNKNOWN")
 
-            entries = []
-            if self.audit_file.exists():
-                try:
-                    with open(self.audit_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                        if isinstance(data, list):
-                            entries = data
-                except Exception:
-                    entries = []
-
-            entries.append(entry)
-            # Keep the last 500 audit entries
-            if len(entries) > 500:
-                entries = entries[-500:]
-
-            with open(self.audit_file, "w", encoding="utf-8") as f:
-                json.dump(entries, f, indent=2)
-
-        except Exception as exc:
-            logger.error("Failed to write audit log: %s", exc)
-
-    def get_recent_audit_logs(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Retrieve recent audit log items."""
-        if not self.audit_file.exists():
-            return []
-        try:
-            with open(self.audit_file, "r", encoding="utf-8") as f:
-                entries = json.load(f)
-            return entries[-limit:] if isinstance(entries, list) else []
+            with open(self.audit_log_path, "a", encoding="utf-8") as handle:
+                handle.write(
+                    f"[{timestamp}] [LEVEL={risk}] [{status}] TOOL: {tool_name} | "
+                    f"ARGS: {json.dumps(safe_args, default=str)[:400]} | "
+                    f"RESULT: {summary}\n"
+                )
         except Exception:
-            return []
+            # Auditing must never break tool execution.
+            pass
+
+    def read_audit_log(self, lines: int = 50) -> Dict[str, Any]:
+        """Return the most recent audit entries."""
+        if not self.audit_log_path.exists():
+            return {"success": True, "log": [], "message": "No audit log entries yet."}
+        try:
+            with open(self.audit_log_path, "r", encoding="utf-8") as handle:
+                all_lines = handle.readlines()
+            recent = all_lines[-lines:]
+            return {
+                "success": True,
+                "total_entries": len(all_lines),
+                "returned": len(recent),
+                "log": [line.strip() for line in recent],
+            }
+        except Exception as exc:  # pragma: no cover - defensive
+            return {"success": False, "error": str(exc)}
 
 
-_permission_manager: Optional[PermissionManager] = None
+_PERMISSION_MANAGER: Optional[PermissionManager] = None
 
 
 def get_permission_manager() -> PermissionManager:
-    """Get the global PermissionManager singleton."""
-    global _permission_manager
-    if _permission_manager is None:
-        _permission_manager = PermissionManager()
-    return _permission_manager
+    """Return the process-wide Permission Manager singleton."""
+    global _PERMISSION_MANAGER
+    if _PERMISSION_MANAGER is None:
+        _PERMISSION_MANAGER = PermissionManager()
+    return _PERMISSION_MANAGER
