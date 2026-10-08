@@ -1,0 +1,18 @@
+[Unit]
+Description=Jarvis Always-On 24/7 Autonomous Daemon & Telegram Bridge
+After=network.target
+
+[Service]
+Type=simple
+User=samuel-omari
+WorkingDirectory=/home/samuel-omari/jarvis
+EnvironmentFile=/home/samuel-omari/jarvis/.env
+ExecStart=/home/samuel-omari/jarvis/venv/bin/python daemon.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

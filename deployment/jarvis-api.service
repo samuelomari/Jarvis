@@ -1,0 +1,18 @@
+[Unit]
+Description=Jarvis AI Assistant Web Server & Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=samuel-omari
+WorkingDirectory=/home/samuel-omari/jarvis
+EnvironmentFile=/home/samuel-omari/jarvis/.env
+ExecStart=/home/samuel-omari/jarvis/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

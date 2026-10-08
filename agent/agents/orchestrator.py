@@ -2,7 +2,14 @@
 
 from typing import Any, Dict, List, Optional
 from agent.agents.base import BaseAgent
-from agent.agents.specialized import CoderAgent, PlannerAgent, ResearcherAgent, ReviewerAgent
+from agent.agents.specialized import (
+    BusinessAgent,
+    CoderAgent,
+    CompetitorTrackerAgent,
+    PlannerAgent,
+    ResearcherAgent,
+    ReviewerAgent,
+)
 
 
 class AgentOrchestrator:
@@ -18,6 +25,8 @@ class AgentOrchestrator:
         self.register_agent(ResearcherAgent())
         self.register_agent(PlannerAgent())
         self.register_agent(ReviewerAgent())
+        self.register_agent(BusinessAgent())
+        self.register_agent(CompetitorTrackerAgent())
 
     def register_agent(self, agent: BaseAgent) -> None:
         """Register an agent instance by name."""

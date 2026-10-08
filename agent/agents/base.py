@@ -1,13 +1,15 @@
-"""Base Agent class for Jarvis AI Subagent system."""
+"""Base Agent class for Jarvis AI Subagent system with Google Gemini support."""
 
 import json
-from typing import Any, Callable, Dict, List, Optional
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 from config import (
+    AI_PROVIDER,
     ANTHROPIC_API_KEY,
     ANTHROPIC_WORKSPACE_ID,
     DEV_MODE,
+    GEMINI_API_KEY,
     MAX_TOKENS,
     MODEL,
     PROJECT_ROOT,
@@ -21,7 +23,7 @@ except ImportError:
 
 
 class BaseAgent:
-    """Abstract base class for specialized AI agents."""
+    """Abstract base class for specialized AI agents powered by Gemini."""
 
     def __init__(
         self,
@@ -45,21 +47,30 @@ class BaseAgent:
         return [t for t in all_tools if t["name"] in self.allowed_tools]
 
     def _get_client(self):
-        """Get Anthropic client or MockClient."""
-        if DEV_MODE or not ANTHROPIC_API_KEY or anthropic is None:
+        """Get Gemini client, Anthropic client, or MockClient."""
+        if DEV_MODE:
             from agent.mock import MockClient
             return MockClient(), True
 
-        try:
-            kwargs = {"api_key": ANTHROPIC_API_KEY}
-            if ANTHROPIC_WORKSPACE_ID and ANTHROPIC_WORKSPACE_ID.strip():
-                kwargs["default_headers"] = {
-                    "anthropic-workspace-id": ANTHROPIC_WORKSPACE_ID
-                }
-            return anthropic.Anthropic(**kwargs), False
-        except Exception:
-            from agent.mock import MockClient
-            return MockClient(), True
+        # 1. Primary: Google Gemini
+        if GEMINI_API_KEY and (AI_PROVIDER == "gemini" or not ANTHROPIC_API_KEY):
+            from agent.gemini_client import GeminiClient
+            return GeminiClient(api_key=GEMINI_API_KEY, default_model=MODEL), False
+
+        # 2. Anthropic fallback
+        if ANTHROPIC_API_KEY and anthropic is not None:
+            try:
+                kwargs = {"api_key": ANTHROPIC_API_KEY}
+                if ANTHROPIC_WORKSPACE_ID and ANTHROPIC_WORKSPACE_ID.strip():
+                    kwargs["default_headers"] = {
+                        "anthropic-workspace-id": ANTHROPIC_WORKSPACE_ID
+                    }
+                return anthropic.Anthropic(**kwargs), False
+            except Exception:
+                pass
+
+        from agent.mock import MockClient
+        return MockClient(), True
 
     def execute(
         self,
@@ -91,7 +102,7 @@ class BaseAgent:
                 "mode": "offline/mock",
             }
 
-        # Real Claude execution loop
+        # Real AI Brain execution loop
         full_system = f"{self.system_prompt}\n\nYou are operating as the specialized subagent '{self.name}' ({self.role}) within the Jarvis AI system."
         max_turns = 8
         turn = 0
@@ -116,13 +127,15 @@ class BaseAgent:
                     for block in response.content:
                         if hasattr(block, "text") and block.text:
                             parts.append(block.text)
+                        elif isinstance(block, dict) and block.get("type") == "text":
+                            parts.append(block.get("text", ""))
                     final_text = "\n\n".join(parts)
                     break
 
                 # Process tool calls
                 tool_results = []
                 for block in response.content:
-                    if block.type != "tool_use":
+                    if getattr(block, "type", "") != "tool_use":
                         continue
 
                     tool_name = block.name
@@ -147,7 +160,8 @@ class BaseAgent:
 
                     tool_payload = {
                         "type": "tool_result",
-                        "tool_use_id": block.id,
+                        "tool_use_id": getattr(block, "id", f"call_{tool_name}"),
+                        "tool_name": tool_name,
                         "content": content_str,
                     }
                     if is_error:
@@ -170,7 +184,7 @@ class BaseAgent:
             }
 
         except Exception as exc:
-            # When offline, in sandbox, or without valid API credits, fallback gracefully
+            # Fallback gracefully
             simulated = self._generate_mock_output(task, context)
             return {
                 "success": True,
