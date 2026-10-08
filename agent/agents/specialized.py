@@ -147,3 +147,76 @@ class ReviewerAgent(BaseAgent):
             f"- **Security Checklist:** Input validation verified; safe workspace boundaries enforced.\n"
             f"- **Quality Assessment:** Ready for production with all test assertions passing."
         )
+
+
+class BusinessAgent(BaseAgent):
+    """Specialized agent for CRM operations, lead management, and client outreach."""
+
+    def __init__(self):
+        system_prompt = (
+            "You are the Business Operations Agent, a strategic CRM and client management expert. "
+            "Your responsibilities: track and qualify new business leads, manage client pipelines, "
+            "draft professional emails and outreach proposals, maintain client records, and coordinate follow-up schedules."
+        )
+        allowed_tools = [
+            "crm_add_lead",
+            "crm_list_leads",
+            "crm_update_lead",
+            "crm_get_pipeline_summary",
+            "send_email",
+            "draft_email",
+            "list_email_drafts",
+            "remember",
+            "recall",
+        ]
+        super().__init__(
+            name="business",
+            role="Business & CRM Operations Lead",
+            description="Manages sales pipelines, qualifies leads, drafts client proposals, and automates outreach.",
+            system_prompt=system_prompt,
+            allowed_tools=allowed_tools,
+        )
+
+    def _generate_mock_output(self, task: str, context: Optional[str]) -> str:
+        return (
+            f"### [Business Agent] Operations Report\n\n"
+            f"- **Action:** {task}\n"
+            f"- **Pipeline Status:** Verified CRM state and staged communications.\n"
+            f"- **Next Steps:** Follow-up scheduled in accordance with business guidelines."
+        )
+
+
+class CompetitorTrackerAgent(BaseAgent):
+    """Specialized agent for competitor surveillance, pricing comparison, and market intelligence."""
+
+    def __init__(self):
+        system_prompt = (
+            "You are the Competitor Tracker Agent, an elite market intelligence and competitor analysis specialist. "
+            "Your responsibilities: monitor competitor websites, track product updates, analyze pricing and feature changes, "
+            "synthesize competitive positioning matrices, and deliver executive intelligence briefings."
+        )
+        allowed_tools = [
+            "search_web",
+            "fetch_webpage",
+            "gdrive_list_files",
+            "gdrive_upload_file",
+            "remember",
+            "recall",
+            "send_telegram_message",
+        ]
+        super().__init__(
+            name="competitor_tracker",
+            role="Market Intelligence & Competitor Analyst",
+            description="Monitors market rivals, analyzes feature changes and pricing, and generates competitive intelligence briefs.",
+            system_prompt=system_prompt,
+            allowed_tools=allowed_tools,
+        )
+
+    def _generate_mock_output(self, task: str, context: Optional[str]) -> str:
+        return (
+            f"### [Competitor Tracker Agent] Market Briefing\n\n"
+            f"- **Target:** {task}\n"
+            f"- **Key Findings:** Competitor pricing and feature matrix indexed.\n"
+            f"- **Strategic Insight:** Identified differentiation opportunities."
+        )
+

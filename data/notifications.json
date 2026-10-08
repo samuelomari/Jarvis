@@ -1,12 +1,228 @@
 [
   {
+    "id": "notif_60626aed",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:46:46.555950",
+    "read": false
+  },
+  {
+    "id": "notif_c26f11a9",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-10-08T15:46:46.519358",
+    "read": true
+  },
+  {
+    "id": "notif_b83adfcf",
+    "title": "System Check",
+    "message": "Tool test alert",
+    "level": "info",
+    "source": "jarvis_agent",
+    "timestamp": "2026-10-08T15:46:45.879537",
+    "read": true
+  },
+  {
+    "id": "notif_1dd1d264",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Audit dependencies and check permissions'\nAutonomous Mission Completed: 'Audit dependencies and check permissions'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:46:45.126415",
+    "read": true
+  },
+  {
+    "id": "notif_38b46b52",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:39:56.530278",
+    "read": true
+  },
+  {
+    "id": "notif_b7328f7b",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-10-08T15:39:56.494855",
+    "read": true
+  },
+  {
+    "id": "notif_2997b79f",
+    "title": "System Check",
+    "message": "Tool test alert",
+    "level": "info",
+    "source": "jarvis_agent",
+    "timestamp": "2026-10-08T15:39:55.775268",
+    "read": true
+  },
+  {
+    "id": "notif_47828d88",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Audit dependencies and check permissions'\nAutonomous Mission Completed: 'Audit dependencies and check permissions'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:39:55.613740",
+    "read": true
+  },
+  {
+    "id": "notif_d78bb0bb",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:31:59.157414",
+    "read": true
+  },
+  {
+    "id": "notif_03c4e606",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-10-08T15:31:59.119316",
+    "read": true
+  },
+  {
+    "id": "notif_8194e43d",
+    "title": "System Check",
+    "message": "Tool test alert",
+    "level": "info",
+    "source": "jarvis_agent",
+    "timestamp": "2026-10-08T15:31:58.017671",
+    "read": true
+  },
+  {
+    "id": "notif_afe11b5c",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Audit dependencies and check permissions'\nAutonomous Mission Completed: 'Audit dependencies and check permissions'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:31:57.781977",
+    "read": true
+  },
+  {
+    "id": "notif_3fe5e1a0",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:31:45.115331",
+    "read": true
+  },
+  {
+    "id": "notif_f4be2fab",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-10-08T15:31:45.054944",
+    "read": true
+  },
+  {
+    "id": "notif_6b30e366",
+    "title": "System Check",
+    "message": "Tool test alert",
+    "level": "info",
+    "source": "jarvis_agent",
+    "timestamp": "2026-10-08T15:31:44.256743",
+    "read": true
+  },
+  {
+    "id": "notif_ad3cf1e0",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Audit dependencies and check permissions'\nAutonomous Mission Completed: 'Audit dependencies and check permissions'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:31:44.086596",
+    "read": true
+  },
+  {
+    "id": "notif_f718399e",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:30:52.872730",
+    "read": true
+  },
+  {
+    "id": "notif_e1d934f1",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-10-08T15:30:52.845968",
+    "read": true
+  },
+  {
+    "id": "notif_1f6391c1",
+    "title": "System Check",
+    "message": "Tool test alert",
+    "level": "info",
+    "source": "jarvis_agent",
+    "timestamp": "2026-10-08T15:30:52.253034",
+    "read": true
+  },
+  {
+    "id": "notif_e8d263b3",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Audit dependencies and check permissions'\nAutonomous Mission Completed: 'Audit dependencies and check permissions'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:30:51.935836",
+    "read": true
+  },
+  {
+    "id": "notif_df45d9fb",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:30:45.311776",
+    "read": true
+  },
+  {
+    "id": "notif_5b76d68a",
+    "title": "Server Test Notification",
+    "message": "Testing notification endpoint",
+    "level": "info",
+    "source": "api_client",
+    "timestamp": "2026-10-08T15:30:45.275467",
+    "read": true
+  },
+  {
+    "id": "notif_b6394df2",
+    "title": "System Check",
+    "message": "Tool test alert",
+    "level": "info",
+    "source": "jarvis_agent",
+    "timestamp": "2026-10-08T15:30:44.758057",
+    "read": true
+  },
+  {
+    "id": "notif_5ebcc1f7",
+    "title": "Autonomous Mission Accomplished",
+    "message": "Goal: 'Audit dependencies and check permissions'\nAutonomous Mission Completed: 'Audit dependencies and check permissions'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
+    "level": "success",
+    "source": "autonomous_engine",
+    "timestamp": "2026-10-08T15:30:44.623323",
+    "read": true
+  },
+  {
     "id": "notif_707fb366",
     "title": "Autonomous Mission Accomplished",
     "message": "Goal: 'Run brief diagnostic check'\nAutonomous Mission Completed: 'Run brief diagnostic check'\n- Duration: 0.0s\n- Worker: Coder\n- Status: Verified by Quality Reviewer",
     "level": "success",
     "source": "autonomous_engine",
     "timestamp": "2026-10-02T22:08:32.024562",
-    "read": false
+    "read": true
   },
   {
     "id": "notif_c2fb839d",

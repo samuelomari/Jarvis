@@ -1,4 +1,4 @@
-"""Jarvis Always-On Autonomous Daemon runner."""
+"""Jarvis Always-On Autonomous Daemon runner with Telegram commands & proactive triggers."""
 
 import os
 import signal
@@ -10,10 +10,12 @@ from pathlib import Path
 from autonomous.scheduler import get_scheduler
 from memory.calendar_manager import CalendarManager
 from notifications.manager import get_notification_manager
+from notifications.telegram import TelegramBotRunner, is_telegram_configured
 
 calendar_manager = CalendarManager()
 task_scheduler = get_scheduler()
 notification_manager = get_notification_manager()
+telegram_bot = TelegramBotRunner()
 
 RUNNING = True
 
@@ -26,10 +28,10 @@ def handle_shutdown(signum, frame):
 
 
 def run_daemon(poll_interval: int = 5):
-    """Main daemon loop checking reminders, executing due autonomous missions, and dispatching alerts."""
+    """Main daemon loop checking reminders, autonomous missions, Telegram commands, and proactive triggers."""
     print("=" * 65)
-    print(" JARVIS ALWAYS-ON AUTONOMOUS DAEMON ONLINE")
-    print(" Subsystems: Calendar Reminders | Autonomous Task Scheduler | Desktop Alert Hub")
+    print(" JARVIS ALWAYS-ON AUTONOMOUS DAEMON ONLINE (24/7 VPS MODE)")
+    print(" Subsystems: Gemini Brain | Calendar Reminders | Task Scheduler | Telegram Bridge")
     print(f" Polling cycle: every {poll_interval}s | Press Ctrl+C to terminate.")
     print("=" * 65)
 
@@ -39,7 +41,7 @@ def run_daemon(poll_interval: int = 5):
     # Initial notification
     notification_manager.notify(
         title="Jarvis Daemon Online",
-        message="Background daemon initialized. Monitoring agenda reminders and autonomous missions.",
+        message="Background daemon initialized. Monitoring agenda reminders, autonomous missions, and Telegram commands.",
         level="info",
         source="daemon",
         desktop_alert=True,
@@ -74,6 +76,15 @@ def run_daemon(poll_interval: int = 5):
                 print(f"[{now_str}] [AUTONOMOUS MISSION] Executed: {job.get('name')}")
         except Exception as exc:
             print(f"[{now_str}] [DAEMON SCHEDULER ERROR] {exc}", file=sys.stderr)
+
+        # 3. Check Telegram commands from user's phone (Step 06 & Step 10)
+        try:
+            if is_telegram_configured():
+                responses = telegram_bot.process_pending_commands()
+                for resp in responses:
+                    print(f"[{now_str}] [TELEGRAM COMMAND] Handled: '{resp.get('query')}'")
+        except Exception as exc:
+            print(f"[{now_str}] [DAEMON TELEGRAM ERROR] {exc}", file=sys.stderr)
 
         time.sleep(poll_interval)
 

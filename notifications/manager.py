@@ -123,10 +123,23 @@ class NotificationManager:
         if desktop_alert:
             desktop_sent = self._send_desktop_notification(clean_title, clean_message, clean_level)
 
+        # Forward alerts and mission summaries to Telegram if configured
+        telegram_sent = False
+        if clean_level in ("alert", "error", "warning") or source in ("autonomous_mission", "calendar_reminder"):
+            try:
+                from notifications.telegram import is_telegram_configured, send_telegram_message
+                if is_telegram_configured():
+                    telegram_text = f"*{clean_title}*\n{clean_message}"
+                    res = send_telegram_message(telegram_text)
+                    telegram_sent = res.get("success", False)
+            except Exception:
+                pass
+
         return {
             "success": True,
             "notification": item,
             "desktop_sent": desktop_sent,
+            "telegram_sent": telegram_sent,
         }
 
     def list_notifications(

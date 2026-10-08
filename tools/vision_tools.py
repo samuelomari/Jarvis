@@ -1,4 +1,4 @@
-"""Vision tools - screenshot analysis using Claude vision API."""
+"""Vision tools for analyzing screenshots and images using Google Gemini Vision."""
 
 import base64
 from pathlib import Path
@@ -6,43 +6,38 @@ from typing import Any, Dict, Optional
 
 from tools.registry import register_tool
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
 
 def _encode_image_base64(image_path: str) -> Optional[str]:
-    """Encode an image file to base64."""
+    """Read an image file and return its base64-encoded string."""
     try:
-        path = Path(image_path)
-        if not path.is_absolute():
-            path = PROJECT_ROOT / image_path
-        if not path.exists():
+        path = Path(image_path).expanduser().resolve()
+        if not path.is_file():
             return None
-        with open(path, "rb") as f:
-            return base64.standard_b64encode(f.read()).decode("utf-8")
+        return base64.b64encode(path.read_bytes()).decode("utf-8")
     except Exception:
         return None
 
 
 @register_tool({
     "name": "analyze_screenshot",
-    "description": "Take a screenshot and analyze it using Claude vision to describe what is on screen, identify errors, or answer questions about the UI.",
+    "description": "Capture the current screen or take a specified image and analyze it using Gemini vision AI.",
     "input_schema": {
         "type": "object",
         "properties": {
             "question": {
                 "type": "string",
-                "description": "What to analyze or ask about the screen (e.g. 'What errors are visible?', 'Describe the UI', 'What application is open?').",
+                "description": "What to look for or analyze in the screenshot (e.g. 'What error is shown?', 'Describe what is on screen').",
             },
             "image_path": {
                 "type": "string",
-                "description": "Optional path to an existing image file. If not provided, a new screenshot is taken.",
+                "description": "Optional path to an existing image file. If omitted, takes a fresh screenshot.",
             },
         },
         "required": ["question"],
     },
 })
 def analyze_screenshot(question: str, image_path: Optional[str] = None) -> Dict[str, Any]:
-    """Analyze a screenshot using Claude vision."""
+    """Analyze a screenshot using Google Gemini vision."""
     # Take screenshot if no image provided
     if not image_path:
         from tools.computer_control import take_screenshot
@@ -54,72 +49,82 @@ def analyze_screenshot(question: str, image_path: Optional[str] = None) -> Dict[
             }
         image_path = shot_result["absolute_path"]
 
-    # Encode image
-    encoded = _encode_image_base64(image_path)
-    if not encoded:
-        return {"success": False, "error": f"Could not read image at '{image_path}'."}
+    path = Path(image_path).expanduser().resolve()
+    if not path.is_file():
+        return {"success": False, "error": f"Could not find image at '{image_path}'."}
 
-    # Determine media type
     path_lower = str(image_path).lower()
     media_type = "image/jpeg" if path_lower.endswith((".jpg", ".jpeg")) else "image/png"
 
-    # Call Claude vision
-    try:
-        from config import ANTHROPIC_API_KEY, MODEL
-        import anthropic
+    from config import GEMINI_API_KEY, ANTHROPIC_API_KEY, MODEL
 
-        if not ANTHROPIC_API_KEY:
+    # 1. Primary: Google Gemini Vision
+    if GEMINI_API_KEY:
+        try:
+            from agent.gemini_client import GeminiClient
+            client = GeminiClient(api_key=GEMINI_API_KEY, default_model=MODEL)
+            image_bytes = path.read_bytes()
+            analysis_text = client.analyze_image(
+                image_bytes=image_bytes,
+                mime_type=media_type,
+                prompt=question,
+            )
             return {
-                "success": False,
-                "error": "Vision analysis requires a real Anthropic API key (ANTHROPIC_API_KEY not set).",
+                "success": True,
+                "provider": "gemini",
+                "question": question,
+                "analysis": analysis_text,
+                "image_path": str(image_path),
             }
+        except Exception as exc:
+            return {"success": False, "error": f"Gemini Vision error: {str(exc)}"}
 
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=1024,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": encoded,
+    # 2. Fallback: Anthropic Claude Vision
+    if ANTHROPIC_API_KEY:
+        try:
+            import anthropic
+            encoded = _encode_image_base64(str(image_path))
+            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            response = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=1024,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": encoded,
+                                },
                             },
-                        },
-                        {
-                            "type": "text",
-                            "text": question,
-                        },
-                    ],
-                }
-            ],
-        )
+                            {"type": "text", "text": question},
+                        ],
+                    }
+                ],
+            )
+            analysis = "".join(b.text for b in response.content if hasattr(b, "text"))
+            return {
+                "success": True,
+                "provider": "anthropic",
+                "question": question,
+                "analysis": analysis,
+                "image_path": str(image_path),
+            }
+        except Exception as exc:
+            return {"success": False, "error": f"Anthropic Vision error: {str(exc)}"}
 
-        analysis = ""
-        for block in response.content:
-            if hasattr(block, "text"):
-                analysis += block.text
-
-        return {
-            "success": True,
-            "question": question,
-            "analysis": analysis,
-            "image_path": str(image_path),
-        }
-
-    except ImportError:
-        return {"success": False, "error": "anthropic package not installed."}
-    except Exception as exc:
-        return {"success": False, "error": f"Vision analysis failed: {str(exc)}"}
+    return {
+        "success": False,
+        "error": "Vision analysis requires an AI API key. Configure GEMINI_API_KEY in your .env file.",
+    }
 
 
 @register_tool({
     "name": "analyze_image_file",
-    "description": "Analyze any image file (screenshot, diagram, error message, document) using Claude vision.",
+    "description": "Analyze any image file (screenshot, diagram, error message, document) using Gemini vision.",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -127,14 +132,14 @@ def analyze_screenshot(question: str, image_path: Optional[str] = None) -> Dict[
                 "type": "string",
                 "description": "Path to the image file to analyze.",
             },
-            "question": {
+            "prompt": {
                 "type": "string",
-                "description": "What to analyze or ask about the image.",
+                "description": "Instructions or questions about the image (defaults to 'Describe this image in detail').",
             },
         },
-        "required": ["image_path", "question"],
+        "required": ["image_path"],
     },
 })
-def analyze_image_file(image_path: str, question: str) -> Dict[str, Any]:
-    """Analyze an image file using Claude vision."""
-    return analyze_screenshot(question=question, image_path=image_path)
+def analyze_image_file(image_path: str, prompt: str = "Describe this image in detail.") -> Dict[str, Any]:
+    """Analyze an image file using Gemini vision."""
+    return analyze_screenshot(question=prompt, image_path=image_path)

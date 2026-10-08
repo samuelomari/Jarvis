@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  jarvis-api:
+    build: .
+    command: uvicorn server:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./memory:/app/memory
+      - ./logs:/app/logs
+    restart: always
+
+  jarvis-daemon:
+    build: .
+    command: python daemon.py
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./memory:/app/memory
+      - ./logs:/app/logs
+    restart: always
+

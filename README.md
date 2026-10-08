@@ -1,415 +1,118 @@
-# JARVIS v0.1 - Personal AI Assistant
+# JARVIS - Autonomous Personal AI Worker & Assistant
 
-Jarvis is a personal AI assistant built with Claude, designed as an incremental development project. This is **Stage 1** - the basic working prototype.
-
-## Architecture
-
-```
-               JARVIS v0.1
-                    │
-        ┌───────────┼───────────┐
-        │           │           │
-     Claude      Memory        Tools
-     (API)       (JSON)    (Python)
-        │           │           │
-        └───────────┼───────────┘
-                    │
-              CLI Interface
-```
-
-## Project Structure
-
-```
-jarvis/
-├── main.py                 # Entry point - CLI interface
-├── config.py              # Configuration (model, API keys, tools)
-├── SYSTEM.md              # System prompt & personality definition
-│
-├── agent/
-│   ├── __init__.py
-│   └── core.py           # Core Jarvis agent loop with tool execution
-│
-├── tools/
-│   ├── __init__.py
-│   └── basic.py          # Initial tools (get_current_time)
-│
-├── memory/
-│   └── memory.json       # Persistent memory storage
-│
-├── venv/                 # Python virtual environment
-├── logs/                 # Log files (empty)
-├── data/                 # Data files (empty)
-│
-├── requirements.txt      # Python dependencies
-├── .env                  # API key (gitignored)
-└── .gitignore
-```
-
-## Setup
-
-### 1. Run without a paid API key (recommended)
-
-Jarvis now supports a built-in local fallback mode. If you do not want to pay for Anthropic, simply leave `ANTHROPIC_API_KEY` unset and start the app. It automatically switches to the offline mock client.
-
-You can also force it explicitly:
-
-```bash
-JARVIS_DEV_MODE=true
-```
-
-### 2. Optional: use the real Anthropic API
-
-If you want the cloud model instead, create an account at [console.anthropic.com](https://console.anthropic.com/), generate an API key, and add it in `.env`:
-
-```bash
-ANTHROPIC_API_KEY=your_api_key_here
-JARVIS_DEV_MODE=false
-```
-
-**Never commit `.env` to git** (it's in `.gitignore`)
-
-### 3. Activate virtual environment
-
-```bash
-cd ~/jarvis
-source venv/bin/activate
-```
-
-You'll see `(venv)` at the start of your terminal prompt.
-
-### 4. Run Jarvis
-
-```bash
-python3 main.py
-```
-
-You should see:
-
-```
-==================================================
-JARVIS ONLINE
-Type 'exit' to shut down.
-==================================================
-
-You:
-```
-
-### 5. Test it
-
-Try asking:
-
-```
-What time is it?
-```
-
-Jarvis will use the `get_current_time` tool and respond with the current time.
-
-Other things to try:
-
-```
-You: What's 2 + 2?
-You: Tell me a joke.
-You: What can you do?
-You: exit
-```
-
-## How It Works
-
-This is the core **agent loop**:
-
-1. **User input** -> Sent to Claude
-2. **Claude processes** -> Reads `SYSTEM.md`, understands available tools
-3. **Claude decides** -> "I need to use `get_current_time`"
-4. **Tool execution** -> Python runs `get_current_time()`
-5. **Tool result** -> Returned to Claude
-6. **Claude responds** -> Generates final answer
-7. **Display response** -> Shown to user
-
-## Understanding the Code
-
-### `config.py`
-
-Defines the Claude model, API key, and available tools for the agent:
-
-```python
-MODEL = "claude-3-5-sonnet-20241022"
-TOOLS = [
-    {
-        "name": "get_current_time",
-        "description": "Get the current local date and time.",
-        # ...
-    }
-]
-```
-
-Claude sees this tool definition and can request it when needed.
-
-### `tools/basic.py`
-
-Implements the actual Python functions that tools execute:
-
-```python
-def get_current_time():
-    """Return the current local date and time."""
-    return datetime.now().strftime(...)
-```
-
-### `agent/core.py`
-
-The main agent loop - connects Claude to tools:
-
-```python
-response = self.client.messages.create(
-    model=MODEL,
-    system=self.load_system(),  # Loads SYSTEM.md
-    messages=self.messages,
-    tools=TOOLS  # Defines available tools
-)
-
-# If Claude wants a tool:
-if response.stop_reason == "tool_use":
-    result = self.run_tool(tool_name, tool_input)
-    # Send result back to Claude
-```
-
-### `SYSTEM.md`
-
-The system prompt that defines Jarvis's personality, capabilities, and rules:
-
-```markdown
-# JARVIS SYSTEM IDENTITY
-
-You are Jarvis, a personal AI assistant...
-
-## Operating Rules
-
-1. Never expose API keys...
-2. Ask for confirmation before important actions...
-```
-
-Claude reads this every time you chat with Jarvis.
-
-## Capabilities & Tools (Stages 2 - 9)
-
-Jarvis v0.2 includes 17 registered built-in tools across all domains:
-
-| Tool | Domain | Description |
-|---|---|---|
-| `get_current_time` | Utility | Fetches the current local date and time. |
-| `remember` | Memory | Saves facts, preferences, goals, or notes to persistent JSON storage. |
-| `recall` | Memory | Searches and retrieves stored memories across categories. |
-| `forget` | Memory | Deletes specific memories by index or query match. |
-| `read_file` | Filesystem | Reads file contents or line slices within the workspace. |
-| `write_file` | Filesystem | Creates or safely updates files with overwrite guards. |
-| `list_directory` | Filesystem | Formats workspace directory tree with file sizes. |
-| `search_files` | Filesystem | Searches for text patterns across workspace files. |
-| `analyze_codebase` | Analysis | Computes total LOC, language breakdown, and key project files. |
-| `inspect_symbols` | Analysis | Extracts classes, methods, functions, and imports from Python files using AST. |
-| `search_web` | Web Research | Performs live web searches via DuckDuckGo. |
-| `fetch_webpage` | Web Research | Downloads and strips clean text from any URL. |
-| `create_calendar_event` | Calendar | Schedules events and meetings with categories and times. |
-| `list_calendar_events` | Calendar | Queries scheduled agenda items with date filtering. |
-| `set_reminder` | Reminders | Sets timed reminders and alerts. |
-| `list_reminders` | Reminders | Queries pending, triggered, or dismissed reminders. |
-| `dismiss_reminder` | Reminders | Acknowledges active reminder alerts. |
+Jarvis is an autonomous AI worker built with **Google Gemini** as its primary AI brain, designed to run 24/7 on a server or locally to automate workflows, manage business operations, track competitors, execute terminal commands, and communicate seamlessly via a web dashboard and Telegram mobile bridge.
 
 ---
 
-## Web Dashboard UI (Stage 6 - 9)
+## 🛠️ The 10-Step Hermes Agent Architecture
 
-Jarvis includes a modern Cybernetic Web Dashboard:
+Jarvis implements the complete 10-step autonomous worker framework:
 
-1. **Start the Web Server**:
-   ```bash
-   python3 server.py --port 8000
-   ```
-2. **Access the Interface**:
-   Open [http://localhost:8000](http://localhost:8000) in your browser.
+1. **Host 24/7 on a VPS**
+   - Deploy non-stop on any Linux VPS (Hostinger, DigitalOcean, AWS, Hetzner).
+   - Pre-built systemd service units (`jarvis-api.service`, `jarvis-daemon.service`) and Docker Compose configuration.
+   - One-click installer: `sudo bash scripts/deploy_vps.sh`
 
-### Visual Previews
+2. **Framework & Engine**
+   - Headless background daemon (`daemon.py`) and FastAPI REST / WebSocket server (`server.py`).
+   - Clean permission security chokepoint and emergency brake (`/stop`).
 
-![JARVIS Neural Terminal & Interactive AI Chat](docs/images/jarvis_chat_ui.jpg)
+3. **AI Brain: Google Gemini**
+   - Powered natively by **Google Gemini** (`gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-1.5-flash`, `gemini-1.5-pro`).
+   - Full function calling, multimodal vision analysis (`analyze_screenshot`), and intelligent multi-turn agent loop.
+   - Offline fallback mode supported out of the box.
 
-![JARVIS Memory Matrix, Calendar Agenda & Codebase Telemetry Center](docs/images/jarvis_matrix_ui.jpg)
+4. **Structured Memory & Localized Knowledge**
+   - Long-term memory store (`memory/memory.json`) for persistent user preferences, project guidelines, and operational notes.
+   - Identity and safety policies codified in `SYSTEM.md`.
 
-### Dashboard Features
-- **Neural Terminal**: Real-time conversation stream, prompt suggestions, live tool execution cards, and Markdown rendering.
-- **Voice Input**: Use the microphone control to dictate an editable message before sending it to Jarvis.
-- **Memory Matrix**: Visual categorized explorer for preferences, projects, goals, and facts with search and live CRUD.
-- **Agenda & Reminders Hub**: Interactive scheduler and alert center with real-time status chips.
-- **Codebase Analyzer**: Interactive project metrics, workspace tree, and live source previewer.
-- **Developer Mission**: Inspect a workspace, report Git status, optionally install dependencies, run tests, and plan server startup. Dependency installation is opt-in and server startup is reported as a plan rather than detached from the request.
-- **Project Command Center**: Discover or register projects and inspect manifests, tests, Git branch, and working-tree changes through `/api/projects` and `/api/projects/status`.
-- **Web Research Hub**: Live DuckDuckGo search query panel and article extractor.
-- **System Telemetry**: Live CPU, RAM, disk gauges, server uptime, and active tool monitor.
+5. **Tool Suite**
+   - **Terminal**: Shell execution, git commands, system status monitoring.
+   - **Filesystem**: File reading, editing, AST analysis, tree exploration.
+   - **Web & Research**: Real-time web search and webpage extraction.
+   - **Vision**: Screenshot and image inspection via Gemini Vision.
 
-Voice input requires a browser with `SpeechRecognition` support and microphone permission. Use `localhost` or HTTPS where required by the browser. Speech recognition may send audio to a browser or browser-provider service; no audio is uploaded by Jarvis itself.
+6. **Telegram Mobile Bridge**
+   - Control Jarvis from your phone anywhere in the world.
+   - Receive push notifications, morning briefings, and autonomous mission completion alerts.
+   - Run commands (`/status`, `/tasks`, `/stop`) or chat directly with your AI worker.
 
-### Developer Mission API
+7. **Business & Operations Specialists**
+   - **BusinessAgent**: Lead management, client qualification, outreach proposals, CRM maintenance.
+   - **CompetitorTrackerAgent**: Competitor website monitoring, pricing tracking, market intelligence digests.
+   - **ResearcherAgent**, **CoderAgent**, **PlannerAgent**, **ReviewerAgent**.
 
-The dashboard uses a guarded workflow endpoint for workspace-relative projects:
+8. **App & Cloud Integrations**
+   - **Gmail / Email**: Drafting, sending, and searching emails (`send_email`, `draft_email`).
+   - **Google Calendar**: Agenda listing, scheduling events, reminders.
+   - **Google Drive**: Cloud document upload, listing, and reading.
+   - **CRM Pipeline**: Track prospective leads and pipeline statuses (`new`, `contacted`, `qualified`, `proposal`, `won`, `lost`).
 
-```bash
-curl -X POST http://localhost:8000/api/developer/prepare \
-  -H 'Content-Type: application/json' \
-  -d '{"path": ".", "run_tests": true, "install_dependencies": false, "start_server": false}'
-```
+9. **Permanent Workflows & Skills**
+   - Reusable multi-agent skills defined and stored permanently in `data/workflows.json`.
+   - String together tools, research, coding, and notifications into automated pipelines.
 
-Set `install_dependencies` to `true` only after explicitly confirming that package installation is safe for the selected workspace. The workflow never launches a long-running server in the request; when `start_server` is enabled it returns a planned action for a later, supervised process lifecycle.
-
-Failure output can be analyzed without changing the workspace:
-
-```bash
-curl -X POST http://localhost:8000/api/developer/debug \
-  -H 'Content-Type: application/json' \
-  -d '{"output": "ModuleNotFoundError: No module named '\''fastapi'\''"}'
-```
-
-Conversation recall is available at `/api/memory/conversations/search`. Computer-control terminal commands are restricted to the workspace, dangerous patterns require `confirmed: true`, and command attempts are written to the audit log.
-
----
-
-## Security Architecture (Permission Manager)
-
-Stage 10 introduces the security core that mediates every action:
-
-```
-AI Assistant  ->  Permission Manager  ->  Approved Tool / API  ->  Operating System
-```
-
-- **`security/permission_manager.py`** — classifies each tool/command into one of
-  four permission levels (INFORMATION, SAFE_AUTOMATION, SYSTEM_CHANGES,
-  DESTRUCTIVE). LEVEL 0/1 run automatically; LEVEL 2/3 require explicit
-  confirmation. Terminal commands get an independent LOW/MEDIUM/HIGH grade.
-- **`security/emergency.py`** — a global, thread-safe emergency stop. Saying
-  "Jarvis stop", "Jarvis cancel", or "Emergency stop" immediately halts commands,
-  cancels queued automations, and blocks tool execution until control is restored.
-- **Enforcement point** — `tools/registry.execute_tool` refuses or defers any
-  gated action, so the language model can never bypass the Permission Manager.
-- **Audit log** — every execution is appended to `data/command_audit.log` with
-  timestamp, tool, risk level, status, and result. Secrets are always redacted.
-
-New desktop modules registered as tools: `tools/clipboard.py` (clipboard read /
-write / clear), `tools/window_manager.py` (list / focus / minimize / maximize /
-close windows), `tools/file_manager.py` (find files, large files, duplicates,
-organize folders, recycle-bin deletes), `tools/security_manager.py` (status,
-audit log, emergency control, risk preview) and `tools/serious_mode.py` (strict
-confirmation mode).
+10. **Proactive Autonomous Triggers**
+    - Autonomous scheduler running interval and cron missions.
+    - Proactive morning briefings, calendar reminders, and automated competitor checks without waiting to be prompted.
 
 ---
 
-## Always-On Background Daemon (Stage 9)
+## 🚀 Quick Start
 
-Run the background daemon to continuously monitor reminders and system tasks:
+### 1. Configure Environment (`.env`)
+
+Copy the template:
+```bash
+cp .env.example .env
+```
+
+Add your Google Gemini API key:
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+JARVIS_AI_PROVIDER=gemini
+
+# Optional: Telegram mobile bridge
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_CHAT_ID=your_telegram_chat_id
+```
+
+> **Note:** If `GEMINI_API_KEY` is left blank, Jarvis automatically falls back to offline mock mode for testing and local development.
+
+### 2. Run Locally
 
 ```bash
-python3 daemon.py
+# Start CLI Assistant
+./venv/bin/python main.py
+
+# Start Web Dashboard & API (http://localhost:8000)
+./venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+
+# Start 24/7 Autonomous Daemon
+./venv/bin/python daemon.py
+```
+
+### 3. Deploy to a 24/7 VPS Server (Hostinger / Ubuntu)
+
+To run Jarvis continuously in the cloud:
+
+```bash
+sudo bash scripts/deploy_vps.sh
+```
+
+Or using Docker:
+
+```bash
+docker compose up -d
 ```
 
 ---
 
-## Interactive CLI Commands
+## 🧪 Testing
 
-Inside the terminal CLI (`python3 main.py`):
-- `/help` — Display command cheat sheet
-- `/memory` — Inspect all long-term memories in formatted tables
-- `/tools` — List all registered tools and schemas
-- `/status` — System + security status report
-- `/security` — Permission model and emergency state
-- `/audit` — Recent action audit log
-- `/stop` — EMERGENCY STOP (halt commands and automations)
-- `/resume` — Release the emergency stop
-- `/serious` — Toggle serious mode (confirm every state change)
-- `/dashboard` — Display web dashboard URL
-- `/clear` — Clear current conversation message history
-- `/exit` — Shut down Jarvis
-
----
-
-## Running Automated Tests
-
-Run the full pytest test suite:
+Run the full pytest suite:
 
 ```bash
-source venv/bin/activate
-pytest tests/ -v
+./venv/bin/pytest
 ```
-
----
-
-## Roadmap Status
-
-- [x] **Stage 1**: Core LLM Tool Agent Loop
-- [x] **Stage 2**: Persistent Long-Term Memory System
-- [x] **Stage 3**: File Reading & Codebase Static Analysis (AST parsing)
-- [x] **Stage 4**: Live Web Search & Webpage Extractor
-- [x] **Stage 5**: Calendar & Timed Reminders System
-- [x] **Stage 6-9**: Cybernetic Web Dashboard UI & Always-On Daemon
-- [x] **Developer Mission**: Guarded project inspection and test workflow
-- [x] **Stage 10**: Permission Manager, Emergency Stop, Audit Log & desktop plugin modules
-
-## Troubleshooting
-
-### "ModuleNotFoundError: No module named 'anthropic'"
-
-Make sure you activated the virtual environment:
-
-```bash
-source venv/bin/activate
-```
-
-You should see `(venv)` in your terminal prompt.
-
-### "Invalid API key"
-
-Check your `.env` file:
-
-```bash
-cat .env
-```
-
-Make sure it contains a valid key from [console.anthropic.com](https://console.anthropic.com/).
-
-### Claude won't respond
-
-Check that:
-
-1. Your API key is correct
-2. You have internet access
-3. Your Anthropic account has credits
-
-## Development Philosophy
-
-This project follows an **incremental development** approach:
-
-1. Build a working version first (this stage)
-2. Understand how it works
-3. Add one feature at a time
-4. Test each addition
-5. Only then move to the next phase
-
-This prevents over-engineering and ensures each version is actually useful.
-
-## File Structure Philosophy
-
-- **`config.py`** - What the model sees (tool definitions, constants)
-- **`tools/*.py`** - What Python executes (actual implementations)
-- **`agent/core.py`** - The connection between the two
-- **`SYSTEM.md`** - Personality & behavior (change this to customize Jarvis)
-
-This separation means:
-
-- You can swap models without changing tool implementations
-- You can add tools without understanding the agent loop
-- You can modify personality by editing one file
-
-## Resources
-
-- [Anthropic Claude API Docs](https://docs.anthropic.com/)
-- [Claude Tool Use Guide](https://docs.anthropic.com/claude/guide/tool-use)
-- [Python Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python)
-
-## License
-
-Personal project - feel free to modify and extend.
-# Jarvis

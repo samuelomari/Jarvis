@@ -45,7 +45,11 @@ class AutonomousMissionRunner:
 
         # 2. Execution phase - select specialized worker
         goal_lower = goal.lower()
-        if any(kw in goal_lower for kw in ["code", "refactor", "file", "test", "build", "bug", "clean"]):
+        if any(kw in goal_lower for kw in ["competitor", "market", "pricing", "rival", "intelligence"]):
+            worker_name = "competitor_tracker"
+        elif any(kw in goal_lower for kw in ["lead", "crm", "client", "sales", "outreach", "proposal", "customer"]):
+            worker_name = "business"
+        elif any(kw in goal_lower for kw in ["code", "refactor", "file", "test", "build", "bug", "clean"]):
             worker_name = "coder"
         elif any(kw in goal_lower for kw in ["research", "search", "web", "fetch", "news", "docs"]):
             worker_name = "researcher"

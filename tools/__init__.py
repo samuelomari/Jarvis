@@ -28,6 +28,11 @@ from tools import window_manager
 from tools import file_manager
 from tools import security_manager
 from tools import serious_mode
+from tools import telegram_tools
+from tools import email_tools
+from tools import drive_tools
+from tools import crm_tools
+from tools import workflow_tools
 
 __all__ = [
     "register_tool",
@@ -54,4 +59,9 @@ __all__ = [
     "file_manager",
     "security_manager",
     "serious_mode",
+    "telegram_tools",
+    "email_tools",
+    "drive_tools",
+    "crm_tools",
+    "workflow_tools",
 ]
