@@ -58,6 +58,21 @@ Jarvis implements the complete 10-step autonomous worker framework:
 
 ---
 
+## 🔒 Security Architecture (Permission Manager)
+
+Every action flows through a strict permission boundary:
+
+```
+AI Assistant -> Permission Manager -> Approved Tool / API -> Operating System
+```
+
+- **`security/permission_manager.py`**: Classifies each tool into four permission levels (`INFORMATION`, `SAFE_AUTOMATION`, `SYSTEM_CHANGES`, `DESTRUCTIVE`). Level 0/1 run automatically; Level 2/3 require explicit confirmation.
+- **`security/emergency.py`**: Global, thread-safe emergency stop. Saying *"Jarvis stop"*, *"Jarvis cancel"*, or executing `/stop` halts commands and blocks all tool executions.
+- **Enforcement Point**: `tools/registry.execute_tool` gates all actions, preventing the language model from bypassing safety checks.
+- **Audit Log**: Every execution is recorded in `data/command_audit.log` with credentials and secrets redacted.
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Configure Environment (`.env`)
@@ -95,8 +110,6 @@ TELEGRAM_CHAT_ID=your_telegram_chat_id
 
 ### 3. Deploy to a 24/7 VPS Server (Hostinger / Ubuntu)
 
-To run Jarvis continuously in the cloud:
-
 ```bash
 sudo bash scripts/deploy_vps.sh
 ```
@@ -109,6 +122,24 @@ docker compose up -d
 
 ---
 
+## 💻 Interactive CLI Commands
+
+Inside the terminal CLI (`python main.py`):
+- `/help` — Display command cheat sheet
+- `/memory` — Inspect all long-term memories in formatted tables
+- `/tools` — List all registered tools and schemas
+- `/status` — System + security status report
+- `/security` — Permission model and emergency state
+- `/audit` — Recent action audit log
+- `/stop` — EMERGENCY STOP (halts commands and automations)
+- `/resume` — Release the emergency stop
+- `/serious` — Toggle strict confirmation mode
+- `/dashboard` — Display web dashboard URL
+- `/clear` — Clear current conversation message history
+- `/exit` — Shut down Jarvis
+
+---
+
 ## 🧪 Testing
 
 Run the full pytest suite:
@@ -116,3 +147,17 @@ Run the full pytest suite:
 ```bash
 ./venv/bin/pytest
 ```
+
+---
+
+## 🗺️ Roadmap Status
+
+- [x] **Stage 1**: Core LLM Tool Agent Loop
+- [x] **Stage 2**: Persistent Long-Term Memory System
+- [x] **Stage 3**: File Reading & Codebase Static Analysis (AST parsing)
+- [x] **Stage 4**: Live Web Search & Webpage Extractor
+- [x] **Stage 5**: Calendar & Timed Reminders System
+- [x] **Stage 6-9**: Cybernetic Web Dashboard UI & Always-On Daemon
+- [x] **Stage 10**: Permission Manager, Emergency Stop & Audit Log
+- [x] **Gemini Brain**: Google Gemini 2.5 Flash / Pro native migration
+- [x] **Hermes Worker**: 10-Step Autonomous Agent Deployment & Telegram Mobile Bridge
